@@ -8,7 +8,4 @@ export default function HomePage() {
           <div className="brandMark">HTL</div>
           <div>
             <div className="brand">HTL HỒ SƠ CHUẨN</div>
-            <div className="tagline">Trợ lý AI kiểm tra hồ sơ cần làm rõ</div>
-          </div>
-        </div>
-        <span className="pilot">PILOT 1.0 · AI
+            <div className="tagline">Trợ lý AI kiểm
