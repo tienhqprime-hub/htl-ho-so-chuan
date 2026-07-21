@@ -15,3 +15,9 @@ type Result = {
   confidence: number;
   summary: string;
   findings: Finding[];
+  limitations: string[];
+  nextSteps: string[];
+};
+
+const severityLabel: Record<Finding['severity'], string> = {
+  'CAO': 'M
