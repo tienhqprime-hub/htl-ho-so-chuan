@@ -69,7 +69,7 @@ export default function VerificationPage() {
       files.forEach((file) => form.append('files', file));
       form.append('context', context);
 
-      const response = await fetch('/api/verify', { method: 'POST', body: form });
+      const response = await fetch('/api/analyze', { method: 'POST', body: form });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || 'Hệ thống chưa xử lý được hồ sơ.');
       setResult(payload as Result);
