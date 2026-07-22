@@ -1,3 +1,5 @@
+import { GENERAL_DOSSIER_TEMPLATE, getDossierRuleTemplate } from './dossier-rules';
+
 export type DossierStatus = 'Mới tiếp nhận' | 'Đang kiểm tra' | 'Chờ bổ sung' | 'Hoàn thành' | 'Đã đóng';
 
 export type Dossier = {
@@ -54,18 +56,33 @@ export const VERIFICATION_HISTORY_KEY = 'htl-verification-history-v1';
 export const DOSSIER_CHECKLIST_KEY = 'htl-dossier-checklist-v1';
 export const AI_CLASSIFICATION_THRESHOLD = 75;
 
-export const DEFAULT_CHECKLIST_NAMES = [
-  'Giấy chứng nhận đăng ký doanh nghiệp',
-  'Điều lệ doanh nghiệp hiện hành',
-  'Giấy tờ pháp lý của người đại diện',
-  'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ',
-];
+export const DEFAULT_CHECKLIST_NAMES = GENERAL_DOSSIER_TEMPLATE.items.map((item) => item.name);
 
 const CHECKLIST_FILE_ALIASES: Record<string, string[]> = {
   'Giấy chứng nhận đăng ký doanh nghiệp': ['dang ky doanh nghiep', 'dkkd', 'gcn dkkd', 'giay phep kinh doanh'],
+  'Giấy chứng nhận đăng ký doanh nghiệp hiện tại': ['dang ky doanh nghiep', 'dkkd', 'gcn dkkd', 'giay phep kinh doanh'],
   'Điều lệ doanh nghiệp hiện hành': ['dieu le', 'company charter', 'charter'],
+  'Điều lệ doanh nghiệp': ['dieu le', 'company charter', 'charter'],
+  'Điều lệ sửa đổi hoặc tài liệu cập nhật': ['dieu le sua doi', 'dieu le cap nhat'],
   'Giấy tờ pháp lý của người đại diện': ['cccd', 'cmnd', 'can cuoc', 'ho chieu', 'passport', 'nguoi dai dien'],
+  'Giấy tờ pháp lý của cá nhân hoặc tổ chức tham gia': ['cccd', 'cmnd', 'can cuoc', 'ho chieu', 'passport', 'dang ky doanh nghiep'],
   'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ': ['hop dong', 'phu luc', 'quyet dinh', 'bien ban', 'van ban', 'tai lieu'],
+  'Giấy đề nghị đăng ký doanh nghiệp': ['giay de nghi', 'dang ky doanh nghiep'],
+  'Danh sách thành viên hoặc cổ đông sáng lập': ['danh sach thanh vien', 'co dong sang lap'],
+  'Văn bản ủy quyền thực hiện thủ tục': ['uy quyen', 'giay uy quyen'],
+  'Thông báo hoặc giấy đề nghị đăng ký thay đổi': ['thong bao thay doi', 'de nghi thay doi'],
+  'Quyết định của chủ sở hữu hoặc cơ quan có thẩm quyền': ['quyet dinh', 'nghi quyet'],
+  'Biên bản họp liên quan đến nội dung thay đổi': ['bien ban hop'],
+  'Tài liệu chứng minh nội dung thay đổi': ['tai lieu chung minh', 'xac nhan', 'chung nhan'],
+  'Dự thảo hoặc bản hợp đồng': ['hop dong', 'du thao hop dong'],
+  'Giấy chứng nhận đăng ký doanh nghiệp của các bên': ['dang ky doanh nghiep', 'dkkd'],
+  'Tài liệu chứng minh thẩm quyền người ký': ['uy quyen', 'bo nhiem', 'quyet dinh'],
+  'Phụ lục, báo giá hoặc phạm vi công việc': ['phu luc', 'bao gia', 'pham vi cong viec', 'sow'],
+  'Biên bản nghiệm thu, bàn giao hoặc đối soát': ['nghiem thu', 'ban giao', 'doi soat'],
+  'Thông báo mời họp hoặc tài liệu lấy ý kiến': ['moi hop', 'lay y kien'],
+  'Biên bản họp hoặc biên bản kiểm phiếu': ['bien ban hop', 'kiem phieu'],
+  'Nghị quyết hoặc quyết định': ['nghi quyet', 'quyet dinh'],
+  'Tài liệu kèm theo làm căn cứ quyết định': ['tai lieu kem theo', 'bao cao', 'de xuat'],
 };
 
 function normalizeText(value: string) {
@@ -131,21 +148,26 @@ export function writeDossierChecklist(dossierId: string, items: DossierChecklist
   localStorage.setItem(DOSSIER_CHECKLIST_KEY, JSON.stringify([...items, ...otherItems]));
 }
 
-export function ensureDossierChecklist(dossierId: string): DossierChecklistItem[] {
+export function createDossierChecklist(dossierId: string, category: string): DossierChecklistItem[] {
+  const template = getDossierRuleTemplate(category);
+  const created = template.items.map((rule) => ({
+    id: crypto.randomUUID(),
+    dossierId,
+    name: rule.name,
+    required: rule.required,
+    status: 'Chưa có' as ChecklistStatus,
+    note: rule.purpose,
+  }));
+  writeDossierChecklist(dossierId, created);
+  return created;
+}
+
+export function ensureDossierChecklist(dossierId: string, category = ''): DossierChecklistItem[] {
   const current = readDossierChecklist(dossierId);
   if (current.length) return current;
 
-  const created = DEFAULT_CHECKLIST_NAMES.map((name) => ({
-    id: crypto.randomUUID(),
-    dossierId,
-    name,
-    required: true,
-    status: 'Chưa có' as ChecklistStatus,
-    note: '',
-  }));
-
-  writeDossierChecklist(dossierId, created);
-  return created;
+  const dossier = readDossiers().find((item) => item.id === dossierId);
+  return createDossierChecklist(dossierId, category || dossier?.category || '');
 }
 
 export function syncUploadedFilesToChecklist(
@@ -154,12 +176,13 @@ export function syncUploadedFilesToChecklist(
   classifications: DocumentClassification[] = [],
 ): ChecklistSyncResult {
   const checklist = ensureDossierChecklist(dossierId);
+  const checklistNames = checklist.map((item) => item.name);
   const matchedFileNames = new Set<string>();
   const reviewFileNames = new Set<string>();
   const updatedItemNames = new Set<string>();
 
   const confidentClassifications = classifications.filter((classification) => {
-    const knownType = DEFAULT_CHECKLIST_NAMES.includes(classification.documentType);
+    const knownType = checklistNames.includes(classification.documentType);
     const isConfident = classification.confidence >= AI_CLASSIFICATION_THRESHOLD;
     if (!knownType || !isConfident) {
       reviewFileNames.add(classification.fileName);
