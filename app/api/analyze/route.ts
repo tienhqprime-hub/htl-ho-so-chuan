@@ -13,10 +13,18 @@ const ALLOWED_MIME = new Set([
   'text/plain',
 ]);
 
+const documentTypes = [
+  'Giấy chứng nhận đăng ký doanh nghiệp',
+  'Điều lệ doanh nghiệp hiện hành',
+  'Giấy tờ pháp lý của người đại diện',
+  'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ',
+  'Chưa xác định',
+] as const;
+
 const resultSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['status', 'confidence', 'summary', 'findings', 'limitations', 'nextSteps'],
+  required: ['status', 'confidence', 'summary', 'documentClassifications', 'findings', 'limitations', 'nextSteps'],
   properties: {
     status: {
       type: 'string',
@@ -24,6 +32,20 @@ const resultSchema = {
     },
     confidence: { type: 'integer', minimum: 0, maximum: 100 },
     summary: { type: 'string' },
+    documentClassifications: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['fileName', 'documentType', 'confidence', 'evidence'],
+        properties: {
+          fileName: { type: 'string' },
+          documentType: { type: 'string', enum: documentTypes },
+          confidence: { type: 'integer', minimum: 0, maximum: 100 },
+          evidence: { type: 'string' },
+        },
+      },
+    },
     findings: {
       type: 'array',
       items: {
@@ -72,6 +94,8 @@ export async function POST(request: Request) {
         `Câu hỏi của người dùng: ${context || 'Kiểm tra tổng thể tính nhất quán, thành phần và các điểm cần xác minh.'}`,
         `Danh mục tài liệu:\n${fileManifest}`,
         'Hãy đối chiếu giữa các tài liệu về: chủ thể, số định danh, ngày tháng, số tiền, đơn vị, thẩm quyền, chữ ký/dấu nhìn thấy được, điều khoản, phụ lục và thành phần còn thiếu.',
+        'Với từng tệp, hãy phân loại vào đúng một nhóm documentType trong schema. Chỉ phân loại khi nội dung quan sát được có căn cứ; nếu không đủ căn cứ phải chọn Chưa xác định.',
+        'Mỗi documentClassifications.evidence phải nêu dấu hiệu nội dung dùng để phân loại, không chỉ lặp lại tên tệp.',
         'Mỗi phát hiện phải ghi rõ bằng chứng quan sát được và nguồn theo mẫu: "Tên tệp – trang/vị trí". Nếu không xác định được trang, ghi đúng vị trí nhìn thấy thay vì tự tạo số trang.',
         'Không biến việc thiếu hồ sơ thành bằng chứng gian lận. Thiếu dữ liệu chỉ dẫn đến trạng thái CẦN XÁC MINH THÊM.',
         'Chỉ dùng trạng thái CÓ DẤU HIỆU BẤT THƯỜNG khi có mâu thuẫn hoặc dấu hiệu cụ thể quan sát được trong tài liệu.',
@@ -211,6 +235,15 @@ function isValidResult(value: any) {
     Number.isInteger(value.confidence) &&
     value.confidence >= 0 && value.confidence <= 100 &&
     typeof value.summary === 'string' &&
+    Array.isArray(value.documentClassifications) &&
+    value.documentClassifications.every((item: any) =>
+      item &&
+      typeof item.fileName === 'string' &&
+      documentTypes.includes(item.documentType) &&
+      Number.isInteger(item.confidence) &&
+      item.confidence >= 0 && item.confidence <= 100 &&
+      typeof item.evidence === 'string'
+    ) &&
     Array.isArray(value.findings) &&
     Array.isArray(value.limitations) &&
     Array.isArray(value.nextSteps),
@@ -222,6 +255,12 @@ function mockResult(files: File[], context: string) {
     status: 'CẦN XÁC MINH THÊM',
     confidence: 35,
     summary: `HTL đã tiếp nhận ${files.length} tài liệu nhưng chưa thể phân tích nội dung vì môi trường triển khai chưa cấu hình OPENAI_API_KEY. Chưa nên sử dụng kết quả này để quyết định về hồ sơ.`,
+    documentClassifications: files.map((file) => ({
+      fileName: safeName(file.name),
+      documentType: 'Chưa xác định',
+      confidence: 0,
+      evidence: 'Chưa có kết quả phân tích nội dung vì máy chủ chưa cấu hình OPENAI_API_KEY.',
+    })),
     findings: [
       {
         severity: 'TRUNG BÌNH',
