@@ -151,6 +151,7 @@ export default function VerificationPage() {
           status: completedResult.status,
           confidence: completedResult.confidence,
           summary: completedResult.summary,
+          crossChecks: completedResult.crossChecks || [],
         });
 
         setChecklistSync(
