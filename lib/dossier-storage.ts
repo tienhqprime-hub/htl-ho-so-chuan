@@ -40,6 +40,13 @@ export const DOSSIER_STORAGE_KEY = 'htl-dossiers-v1';
 export const VERIFICATION_HISTORY_KEY = 'htl-verification-history-v1';
 export const DOSSIER_CHECKLIST_KEY = 'htl-dossier-checklist-v1';
 
+export const DEFAULT_CHECKLIST_NAMES = [
+  'Giấy chứng nhận đăng ký doanh nghiệp',
+  'Điều lệ doanh nghiệp hiện hành',
+  'Giấy tờ pháp lý của người đại diện',
+  'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ',
+];
+
 export function readDossiers(): Dossier[] {
   try {
     return JSON.parse(localStorage.getItem(DOSSIER_STORAGE_KEY) || '[]') as Dossier[];
@@ -90,4 +97,21 @@ export function readDossierChecklist(dossierId: string): DossierChecklistItem[] 
 export function writeDossierChecklist(dossierId: string, items: DossierChecklistItem[]) {
   const otherItems = readChecklist().filter((item) => item.dossierId !== dossierId);
   localStorage.setItem(DOSSIER_CHECKLIST_KEY, JSON.stringify([...items, ...otherItems]));
+}
+
+export function ensureDossierChecklist(dossierId: string): DossierChecklistItem[] {
+  const current = readDossierChecklist(dossierId);
+  if (current.length) return current;
+
+  const created = DEFAULT_CHECKLIST_NAMES.map((name) => ({
+    id: crypto.randomUUID(),
+    dossierId,
+    name,
+    required: true,
+    status: 'Chưa có' as ChecklistStatus,
+    note: '',
+  }));
+
+  writeDossierChecklist(dossierId, created);
+  return created;
 }
