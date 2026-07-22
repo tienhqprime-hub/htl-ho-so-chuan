@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { saveVerificationHistory, updateDossierStatus } from '../../lib/dossier-storage';
 
 type Finding = {
   severity: 'CAO' | 'TRUNG BÌNH' | 'THẤP' | 'THÔNG TIN';
@@ -18,6 +19,13 @@ type Result = {
   findings: Finding[];
   limitations: string[];
   nextSteps: string[];
+};
+
+type DossierContext = {
+  id: string;
+  code: string;
+  name: string;
+  company: string;
 };
 
 const processSteps = [
@@ -42,6 +50,19 @@ export default function VerificationPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
   const [result, setResult] = useState<Result | null>(null);
+  const [dossier, setDossier] = useState<DossierContext | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('dossierId') || '';
+    if (!id) return;
+    setDossier({
+      id,
+      code: params.get('code') || '',
+      name: params.get('name') || '',
+      company: params.get('company') || '',
+    });
+  }, []);
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
@@ -59,6 +80,7 @@ export default function VerificationPage() {
     setResult(null);
     setLoading(true);
     setStep(0);
+    if (dossier) updateDossierStatus(dossier.id, 'Đang kiểm tra');
 
     const timer = window.setInterval(() => {
       setStep((current) => Math.min(current + 1, processSteps.length - 1));
@@ -72,8 +94,31 @@ export default function VerificationPage() {
       const response = await fetch('/api/analyze', { method: 'POST', body: form });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || 'Hệ thống chưa xử lý được hồ sơ.');
-      setResult(payload as Result);
+
+      const completedResult = payload as Result;
+      setResult(completedResult);
+
+      if (dossier) {
+        saveVerificationHistory({
+          id: crypto.randomUUID(),
+          dossierId: dossier.id,
+          dossierCode: dossier.code,
+          dossierName: dossier.name,
+          company: dossier.company,
+          createdAt: new Date().toLocaleString('vi-VN'),
+          fileNames: files.map((file) => file.name),
+          context,
+          status: completedResult.status,
+          confidence: completedResult.confidence,
+          summary: completedResult.summary,
+        });
+        updateDossierStatus(
+          dossier.id,
+          completedResult.status === 'CÓ CƠ SỞ TIN CẬY' ? 'Hoàn thành' : 'Chờ bổ sung'
+        );
+      }
     } catch (caught) {
+      if (dossier) updateDossierStatus(dossier.id, 'Chờ bổ sung');
       setError(caught instanceof Error ? caught.message : 'Đã có lỗi xảy ra.');
     } finally {
       window.clearInterval(timer);
@@ -85,7 +130,10 @@ export default function VerificationPage() {
     <main className="shell narrow">
       <header className="topbar noPrint">
         <Link href="/" className="brand">HTL HỒ SƠ CHUẨN</Link>
-        <span className="pilot">BẢN PILOT</span>
+        <div className="actions">
+          <Link className="primary secondary" href="/ho-so">Danh sách hồ sơ</Link>
+          <span className="pilot">BẢN PILOT</span>
+        </div>
       </header>
 
       <section className="panel noPrint">
@@ -94,6 +142,19 @@ export default function VerificationPage() {
         <p className="leadResult muted">
           Tôi chỉ nhận định từ những tài liệu được cung cấp. Khi chưa đủ bằng chứng, tôi sẽ nói rõ điều đó thay vì suy đoán.
         </p>
+
+        {dossier && (
+          <div className="dossierContext">
+            <div><small>HỒ SƠ ĐANG KIỂM TRA</small><strong>{dossier.code} · {dossier.name}</strong></div>
+            <span>{dossier.company}</span>
+          </div>
+        )}
+
+        {!dossier && (
+          <div className="notice">
+            Phiên này chưa gắn với hồ sơ quản lý. Kết quả vẫn hiển thị nhưng sẽ không được lưu vào lịch sử hồ sơ.
+          </div>
+        )}
 
         <form onSubmit={submit}>
           <label className="upload">
@@ -115,10 +176,7 @@ export default function VerificationPage() {
                   <span>{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                 </div>
               ))}
-              <div>
-                <strong>Tổng cộng</strong>
-                <span>{(totalSize / 1024 / 1024).toFixed(2)} MB</span>
-              </div>
+              <div><strong>Tổng cộng</strong><span>{(totalSize / 1024 / 1024).toFixed(2)} MB</span></div>
             </div>
           )}
 
@@ -145,9 +203,7 @@ export default function VerificationPage() {
           <div className="progressTrack"><span style={{ width: `${((step + 1) / processSteps.length) * 100}%` }} /></div>
           <p className="muted">Anh/chị vui lòng giữ trang này mở. Thời gian xử lý phụ thuộc số lượng và độ dài tài liệu.</p>
           <ol className="processList">
-            {processSteps.map((item, index) => (
-              <li className={index <= step ? 'done' : ''} key={item}>{item}</li>
-            ))}
+            {processSteps.map((item, index) => <li className={index <= step ? 'done' : ''} key={item}>{item}</li>)}
           </ol>
         </section>
       )}
@@ -155,15 +211,12 @@ export default function VerificationPage() {
       {result && (
         <section className="panel result">
           <div className="resultHead">
-            <div>
-              <div className="eyebrow">QUAN ĐIỂM CỦA HTL</div>
-              <h2>{result.status}</h2>
-            </div>
+            <div><div className="eyebrow">QUAN ĐIỂM CỦA HTL</div><h2>{result.status}</h2></div>
             <div className="score"><strong>{result.confidence}%</strong><span>Mức độ tự tin</span></div>
           </div>
-
           <p className="leadResult">{result.summary}</p>
           <div className="notice">Kết quả này hỗ trợ ra quyết định, không thay thế giám định, công chứng, cơ quan cấp phát hoặc tư vấn pháp lý.</div>
+          {dossier && <p className="savedNotice">Đã lưu kết quả vào lịch sử hồ sơ {dossier.code}.</p>}
 
           <h3>Các điểm HTL đã phát hiện</h3>
           <div className="findings">
@@ -179,19 +232,14 @@ export default function VerificationPage() {
           </div>
 
           <div className="twoCols">
-            <div>
-              <h3>Điều chưa thể kết luận</h3>
-              <ul>{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
-            </div>
-            <div>
-              <h3>Việc nên làm tiếp theo</h3>
-              <ol>{result.nextSteps.map((item) => <li key={item}>{item}</li>)}</ol>
-            </div>
+            <div><h3>Điều chưa thể kết luận</h3><ul>{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>
+            <div><h3>Việc nên làm tiếp theo</h3><ol>{result.nextSteps.map((item) => <li key={item}>{item}</li>)}</ol></div>
           </div>
 
           <div className="actions noPrint">
             <button className="primary" onClick={() => window.print()}>In hoặc lưu PDF</button>
-            <button className="primary secondary" onClick={() => { setResult(null); setFiles([]); setContext(''); }}>Kiểm tra bộ hồ sơ khác</button>
+            {dossier && <Link className="primary secondary" href="/ho-so">Trở về hồ sơ</Link>}
+            <button className="primary secondary" onClick={() => { setResult(null); setFiles([]); setContext(''); }}>Kiểm tra tài liệu khác</button>
           </div>
         </section>
       )}
