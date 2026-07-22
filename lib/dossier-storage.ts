@@ -36,14 +36,23 @@ export type DossierChecklistItem = {
   note: string;
 };
 
+export type DocumentClassification = {
+  fileName: string;
+  documentType: string;
+  confidence: number;
+  evidence: string;
+};
+
 export type ChecklistSyncResult = {
   updatedItemNames: string[];
   unmatchedFileNames: string[];
+  reviewFileNames: string[];
 };
 
 export const DOSSIER_STORAGE_KEY = 'htl-dossiers-v1';
 export const VERIFICATION_HISTORY_KEY = 'htl-verification-history-v1';
 export const DOSSIER_CHECKLIST_KEY = 'htl-dossier-checklist-v1';
+export const AI_CLASSIFICATION_THRESHOLD = 75;
 
 export const DEFAULT_CHECKLIST_NAMES = [
   'Giấy chứng nhận đăng ký doanh nghiệp',
@@ -139,34 +148,70 @@ export function ensureDossierChecklist(dossierId: string): DossierChecklistItem[
   return created;
 }
 
-export function syncUploadedFilesToChecklist(dossierId: string, fileNames: string[]): ChecklistSyncResult {
+export function syncUploadedFilesToChecklist(
+  dossierId: string,
+  fileNames: string[],
+  classifications: DocumentClassification[] = [],
+): ChecklistSyncResult {
   const checklist = ensureDossierChecklist(dossierId);
   const matchedFileNames = new Set<string>();
-  const updatedItemNames: string[] = [];
+  const reviewFileNames = new Set<string>();
+  const updatedItemNames = new Set<string>();
+
+  const confidentClassifications = classifications.filter((classification) => {
+    const knownType = DEFAULT_CHECKLIST_NAMES.includes(classification.documentType);
+    const isConfident = classification.confidence >= AI_CLASSIFICATION_THRESHOLD;
+    if (!knownType || !isConfident) {
+      reviewFileNames.add(classification.fileName);
+      return false;
+    }
+    return true;
+  });
 
   const updatedChecklist = checklist.map((item) => {
+    const aiMatches = confidentClassifications.filter((classification) => classification.documentType === item.name);
+    const aiFileNames = aiMatches.map((classification) => classification.fileName);
+    aiFileNames.forEach((fileName) => matchedFileNames.add(fileName));
+
     const aliases = CHECKLIST_FILE_ALIASES[item.name] || [item.name];
-    const matchingFiles = fileNames.filter((fileName) => {
+    const nameMatches = fileNames.filter((fileName) => {
+      if (matchedFileNames.has(fileName)) return false;
       const normalizedFileName = normalizeText(fileName);
       return aliases.some((alias) => normalizedFileName.includes(normalizeText(alias)));
     });
+    nameMatches.forEach((fileName) => matchedFileNames.add(fileName));
 
-    if (!matchingFiles.length) return item;
+    if (!aiMatches.length && !nameMatches.length) return item;
+    updatedItemNames.add(item.name);
 
-    matchingFiles.forEach((fileName) => matchedFileNames.add(fileName));
-    updatedItemNames.push(item.name);
+    const noteParts: string[] = [];
+    if (aiMatches.length) {
+      noteParts.push(...aiMatches.map((classification) =>
+        `AI nhận diện ${classification.fileName} (${classification.confidence}%): ${classification.evidence}`
+      ));
+    }
+    if (nameMatches.length) {
+      noteParts.push(`Ghi nhận dự phòng theo tên tệp: ${nameMatches.join(', ')}.`);
+    }
+    noteParts.push('Trạng thái Đã có chỉ xác nhận đã tiếp nhận tài liệu; chưa khẳng định tài liệu còn hiệu lực, đầy đủ hoặc hợp lệ.');
 
     return {
       ...item,
       status: 'Đã có' as ChecklistStatus,
-      note: `Đã ghi nhận tệp tải lên: ${matchingFiles.join(', ')}. Trạng thái này chỉ xác nhận đã tiếp nhận tài liệu; cần kiểm tra nội dung trước khi kết luận tính phù hợp.`,
+      note: noteParts.join(' '),
     };
   });
 
   writeDossierChecklist(dossierId, updatedChecklist);
 
+  const classifiedFileNames = new Set(classifications.map((classification) => classification.fileName));
+  const unmatchedFileNames = fileNames.filter((fileName) =>
+    !matchedFileNames.has(fileName) && !reviewFileNames.has(fileName) && !classifiedFileNames.has(fileName)
+  );
+
   return {
-    updatedItemNames,
-    unmatchedFileNames: fileNames.filter((fileName) => !matchedFileNames.has(fileName)),
+    updatedItemNames: Array.from(updatedItemNames),
+    unmatchedFileNames,
+    reviewFileNames: Array.from(reviewFileNames),
   };
 }
