@@ -2,7 +2,12 @@
 
 import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { saveVerificationHistory, updateDossierStatus } from '../../lib/dossier-storage';
+import {
+  ChecklistSyncResult,
+  saveVerificationHistory,
+  syncUploadedFilesToChecklist,
+  updateDossierStatus,
+} from '../../lib/dossier-storage';
 
 type Finding = {
   severity: 'CAO' | 'TRUNG BÌNH' | 'THẤP' | 'THÔNG TIN';
@@ -51,6 +56,7 @@ export default function VerificationPage() {
   const [error, setError] = useState('');
   const [result, setResult] = useState<Result | null>(null);
   const [dossier, setDossier] = useState<DossierContext | null>(null);
+  const [checklistSync, setChecklistSync] = useState<ChecklistSyncResult | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -78,6 +84,7 @@ export default function VerificationPage() {
 
     setError('');
     setResult(null);
+    setChecklistSync(null);
     setLoading(true);
     setStep(0);
     if (dossier) updateDossierStatus(dossier.id, 'Đang kiểm tra');
@@ -99,6 +106,7 @@ export default function VerificationPage() {
       setResult(completedResult);
 
       if (dossier) {
+        const fileNames = files.map((file) => file.name);
         saveVerificationHistory({
           id: crypto.randomUUID(),
           dossierId: dossier.id,
@@ -106,12 +114,14 @@ export default function VerificationPage() {
           dossierName: dossier.name,
           company: dossier.company,
           createdAt: new Date().toLocaleString('vi-VN'),
-          fileNames: files.map((file) => file.name),
+          fileNames,
           context,
           status: completedResult.status,
           confidence: completedResult.confidence,
           summary: completedResult.summary,
         });
+
+        setChecklistSync(syncUploadedFilesToChecklist(dossier.id, fileNames));
         updateDossierStatus(
           dossier.id,
           completedResult.status === 'CÓ CƠ SỞ TIN CẬY' ? 'Hoàn thành' : 'Chờ bổ sung'
@@ -124,6 +134,13 @@ export default function VerificationPage() {
       window.clearInterval(timer);
       setLoading(false);
     }
+  }
+
+  function resetVerification() {
+    setResult(null);
+    setChecklistSync(null);
+    setFiles([]);
+    setContext('');
   }
 
   return (
@@ -218,6 +235,32 @@ export default function VerificationPage() {
           <div className="notice">Kết quả này hỗ trợ ra quyết định, không thay thế giám định, công chứng, cơ quan cấp phát hoặc tư vấn pháp lý.</div>
           {dossier && <p className="savedNotice">Đã lưu kết quả vào lịch sử hồ sơ {dossier.code}.</p>}
 
+          {dossier && checklistSync && (
+            <div className="notice">
+              <h3>Checklist hồ sơ đã được đối chiếu</h3>
+              {checklistSync.updatedItemNames.length > 0 ? (
+                <>
+                  <p><strong>Các mục đã ghi nhận có tài liệu:</strong></p>
+                  <ul>{checklistSync.updatedItemNames.map((item) => <li key={item}>{item}</li>)}</ul>
+                </>
+              ) : (
+                <p>Chưa có tên tệp nào đủ rõ để tự gắn với một mục Checklist.</p>
+              )}
+              {checklistSync.unmatchedFileNames.length > 0 && (
+                <>
+                  <p><strong>Các tệp chưa xác định loại tài liệu:</strong></p>
+                  <ul>{checklistSync.unmatchedFileNames.map((item) => <li key={item}>{item}</li>)}</ul>
+                </>
+              )}
+              <p className="muted">
+                Việc ghi nhận chỉ xác nhận hệ thống đã tiếp nhận tệp tương ứng, chưa khẳng định tài liệu còn hiệu lực, đầy đủ hoặc hợp lệ.
+              </p>
+              <Link className="primary secondary" href={`/ho-so/${encodeURIComponent(dossier.id)}`}>
+                Mở Checklist của hồ sơ
+              </Link>
+            </div>
+          )}
+
           <h3>Các điểm HTL đã phát hiện</h3>
           <div className="findings">
             {result.findings.map((finding, index) => (
@@ -238,8 +281,8 @@ export default function VerificationPage() {
 
           <div className="actions noPrint">
             <button className="primary" onClick={() => window.print()}>In hoặc lưu PDF</button>
-            {dossier && <Link className="primary secondary" href="/ho-so">Trở về hồ sơ</Link>}
-            <button className="primary secondary" onClick={() => { setResult(null); setFiles([]); setContext(''); }}>Kiểm tra tài liệu khác</button>
+            {dossier && <Link className="primary secondary" href={`/ho-so/${encodeURIComponent(dossier.id)}`}>Trở về hồ sơ</Link>}
+            <button className="primary secondary" onClick={resetVerification}>Kiểm tra tài liệu khác</button>
           </div>
         </section>
       )}
