@@ -19,11 +19,25 @@ type Finding = {
   recommendation: string;
 };
 
+type CrossCheckStatus = 'THỐNG NHẤT' | 'KHÔNG THỐNG NHẤT' | 'CHƯA ĐỦ DỮ LIỆU';
+
+type CrossCheck = {
+  field: string;
+  status: CrossCheckStatus;
+  values: Array<{
+    value: string;
+    source: string;
+  }>;
+  evidence: string;
+  recommendation: string;
+};
+
 type Result = {
   status: 'CÓ CƠ SỞ TIN CẬY' | 'CẦN XÁC MINH THÊM' | 'CÓ DẤU HIỆU BẤT THƯỜNG';
   confidence: number;
   summary: string;
   documentClassifications: DocumentClassification[];
+  crossChecks: CrossCheck[];
   findings: Finding[];
   limitations: string[];
   nextSteps: string[];
@@ -49,6 +63,12 @@ const severityText: Record<Finding['severity'], string> = {
   'TRUNG BÌNH': 'Cần lưu ý',
   THẤP: 'Theo dõi',
   'THÔNG TIN': 'Thông tin',
+};
+
+const crossCheckBadge: Record<CrossCheckStatus, string> = {
+  'THỐNG NHẤT': 'thông-tin',
+  'KHÔNG THỐNG NHẤT': 'cao',
+  'CHƯA ĐỦ DỮ LIỆU': 'trung-bình',
 };
 
 export default function VerificationPage() {
@@ -77,6 +97,15 @@ export default function VerificationPage() {
     () => files.reduce((sum, file) => sum + file.size, 0),
     [files]
   );
+
+  const crossCheckSummary = useMemo(() => {
+    const checks = result?.crossChecks || [];
+    return {
+      consistent: checks.filter((item) => item.status === 'THỐNG NHẤT').length,
+      inconsistent: checks.filter((item) => item.status === 'KHÔNG THỐNG NHẤT').length,
+      insufficient: checks.filter((item) => item.status === 'CHƯA ĐỦ DỮ LIỆU').length,
+    };
+  }, [result]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -243,6 +272,47 @@ export default function VerificationPage() {
           <p className="leadResult">{result.summary}</p>
           <div className="notice">Kết quả này hỗ trợ ra quyết định, không thay thế giám định, công chứng, cơ quan cấp phát hoặc tư vấn pháp lý.</div>
           {dossier && <p className="savedNotice">Đã lưu kết quả vào lịch sử hồ sơ {dossier.code}.</p>}
+
+          {result.crossChecks?.length > 0 && (
+            <>
+              <div className="resultHead">
+                <div>
+                  <div className="eyebrow">ĐỐI CHIẾU CHÉO GIỮA CÁC TÀI LIỆU</div>
+                  <h2>{crossCheckSummary.inconsistent > 0 ? `${crossCheckSummary.inconsistent} trường không thống nhất` : 'Chưa phát hiện trường nào không thống nhất'}</h2>
+                </div>
+              </div>
+              <div className="twoCols">
+                <div className="finding"><strong>{crossCheckSummary.consistent}</strong><p>Trường thống nhất</p></div>
+                <div className="finding"><strong>{crossCheckSummary.inconsistent}</strong><p>Trường không thống nhất</p></div>
+                <div className="finding"><strong>{crossCheckSummary.insufficient}</strong><p>Trường chưa đủ dữ liệu</p></div>
+              </div>
+              <div className="findings">
+                {result.crossChecks.map((check, index) => (
+                  <article className="finding" key={`${check.field}-${index}`}>
+                    <span className={`badge ${crossCheckBadge[check.status]}`}>{check.status}</span>
+                    <h3>{check.field}</h3>
+                    {check.values.length > 0 ? (
+                      <div>
+                        <p><strong>Các giá trị quan sát được:</strong></p>
+                        <ul>
+                          {check.values.map((entry, valueIndex) => (
+                            <li key={`${entry.value}-${valueIndex}`}><strong>{entry.value}</strong> — {entry.source}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p>Chưa trích xuất được giá trị đủ rõ để so sánh.</p>
+                    )}
+                    <p><strong>Nhận định dựa trên bằng chứng:</strong> {check.evidence}</p>
+                    <p><strong>Khuyến nghị:</strong> {check.recommendation}</p>
+                  </article>
+                ))}
+              </div>
+              <div className="notice">
+                “Không thống nhất” chỉ được ghi nhận khi HTL quan sát thấy ít nhất hai giá trị khác nhau từ các nguồn cụ thể. Thiếu dữ liệu hoặc chỉ có một nguồn được xếp là “Chưa đủ dữ liệu”.
+              </div>
+            </>
+          )}
 
           {result.documentClassifications?.length > 0 && (
             <>
