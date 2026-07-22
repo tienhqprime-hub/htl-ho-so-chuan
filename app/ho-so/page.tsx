@@ -46,6 +46,11 @@ export default function DossiersPage() {
     event.currentTarget.reset();
   }
 
+  function verificationUrl(item: Dossier) {
+    const params = new URLSearchParams({ dossierId: item.id, code: item.code, name: item.name, company: item.company });
+    return `/kiem-tra?${params.toString()}`;
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -78,7 +83,11 @@ export default function DossiersPage() {
           {filtered.map((item) => (
             <article className="dossierItem" key={item.id}>
               <div><strong>{item.code}</strong><h3>{item.name}</h3><p>{item.company} · {item.category || 'Chưa phân loại'} · {item.owner || 'Chưa phân công'}</p></div>
-              <div className="dossierMeta"><span className="badge">{item.status}</span><small>{item.createdAt}</small></div>
+              <div className="dossierMeta">
+                <span className="badge">{item.status}</span>
+                <small>{item.createdAt}</small>
+                <Link className="primary dossierAction" href={verificationUrl(item)}>Kiểm tra tài liệu</Link>
+              </div>
             </article>
           ))}
         </div>
