@@ -55,6 +55,11 @@ export default function DossierDetailPage() {
     return `/kiem-tra?${query.toString()}`;
   }, [dossier]);
 
+  const reportUrl = useMemo(
+    () => dossier ? `/ho-so/${encodeURIComponent(dossier.id)}/bao-cao` : '/ho-so',
+    [dossier]
+  );
+
   const completion = useMemo(() => evaluateDossierCompletion(checklist), [checklist]);
 
   function addChecklistItem(event: FormEvent<HTMLFormElement>) {
@@ -112,6 +117,7 @@ export default function DossierDetailPage() {
         </div>
         <div className="actions">
           <Link className="primary secondary" href="/ho-so">Danh sách hồ sơ</Link>
+          <Link className="primary secondary" href={reportUrl}>Báo cáo hồ sơ</Link>
           <Link className="primary" href={verificationUrl}>Kiểm tra tài liệu</Link>
         </div>
       </header>
@@ -140,6 +146,11 @@ export default function DossierDetailPage() {
             <p><strong>Kết quả gần nhất:</strong> {history[0]?.status || 'Chưa có kết quả'}</p>
             <p><strong>Mức độ hoàn thiện:</strong> {completion.percentage}%</p>
           </div>
+        </div>
+
+        <div className="actions">
+          <Link className="primary" href={reportUrl}>Mở Báo cáo Hồ Sơ Chuẩn</Link>
+          <span className="muted">Báo cáo tổng hợp Checklist, kết quả kiểm tra gần nhất và đối chiếu chéo để in hoặc lưu PDF.</span>
         </div>
       </section>
 
