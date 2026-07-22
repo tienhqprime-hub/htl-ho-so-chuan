@@ -5,6 +5,13 @@ export const maxDuration = 60;
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 30 * 1024 * 1024;
+const ALLOWED_MIME = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'text/plain',
+]);
 
 const resultSchema = {
   type: 'object',
@@ -13,7 +20,7 @@ const resultSchema = {
   properties: {
     status: {
       type: 'string',
-      enum: ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG']
+      enum: ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'],
     },
     confidence: { type: 'integer', minimum: 0, maximum: 100 },
     summary: { type: 'string' },
@@ -28,13 +35,13 @@ const resultSchema = {
           title: { type: 'string' },
           evidence: { type: 'string' },
           source: { type: 'string' },
-          recommendation: { type: 'string' }
-        }
-      }
+          recommendation: { type: 'string' },
+        },
+      },
     },
     limitations: { type: 'array', items: { type: 'string' } },
-    nextSteps: { type: 'array', items: { type: 'string' } }
-  }
+    nextSteps: { type: 'array', items: { type: 'string' } },
+  },
 } as const;
 
 type InputContent =
@@ -46,60 +53,57 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const files = form.getAll('files').filter((value): value is File => value instanceof File);
-    const context = String(form.get('context') || '').trim();
+    const context = String(form.get('context') || '').trim().slice(0, 4000);
 
-    if (!files.length) {
-      return NextResponse.json({ error: 'Thiếu tài liệu cần kiểm tra.' }, { status: 400 });
-    }
-    if (files.length > 8) {
-      return NextResponse.json({ error: 'Bản Pilot hỗ trợ tối đa 8 tệp mỗi phiên.' }, { status: 400 });
-    }
-    if (files.some((file) => file.size > MAX_FILE_BYTES)) {
-      return NextResponse.json({ error: 'Mỗi tệp tối đa 12 MB trong bản Pilot.' }, { status: 400 });
-    }
-    if (files.reduce((total, file) => total + file.size, 0) > MAX_TOTAL_BYTES) {
-      return NextResponse.json({ error: 'Tổng dung lượng mỗi phiên tối đa 30 MB.' }, { status: 400 });
-    }
+    const validationError = validateFiles(files);
+    if (validationError) return NextResponse.json({ error: validationError.message }, { status: validationError.status });
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json(mockResult(files, context));
 
-    const content: InputContent[] = [
-      {
-        type: 'input_text',
-        text: [
-          'Hãy kiểm tra toàn diện các tài liệu đính kèm.',
-          `Mục đích hoặc nghi ngờ của người dùng: ${context || 'Kiểm tra tổng thể tính nhất quán và độ tin cậy.'}`,
-          'Yêu cầu: đối chiếu tên, số, ngày tháng, số liệu, chữ ký/dấu nhìn thấy được, thành phần hồ sơ, mâu thuẫn nội bộ và dấu hiệu cần xác minh.',
-          'Mỗi phát hiện phải nêu nguồn theo tên tệp và trang/vị trí nếu xác định được.',
-          'Không khẳng định tài liệu giả, gian lận hoặc có giá trị pháp lý tuyệt đối. Khi thiếu căn cứ, phải nói rõ giới hạn.'
-        ].join('\n')
-      }
-    ];
+    const fileManifest = files
+      .map((file, index) => `${index + 1}. ${safeName(file.name)} (${inferMime(file.name, file.type)}, ${(file.size / 1024 / 1024).toFixed(2)} MB)`)
+      .join('\n');
+
+    const content: InputContent[] = [{
+      type: 'input_text',
+      text: [
+        'NHIỆM VỤ: Rà soát bộ hồ sơ theo nguyên tắc bằng chứng trước, kết luận sau.',
+        `Câu hỏi của người dùng: ${context || 'Kiểm tra tổng thể tính nhất quán, thành phần và các điểm cần xác minh.'}`,
+        `Danh mục tài liệu:\n${fileManifest}`,
+        'Hãy đối chiếu giữa các tài liệu về: chủ thể, số định danh, ngày tháng, số tiền, đơn vị, thẩm quyền, chữ ký/dấu nhìn thấy được, điều khoản, phụ lục và thành phần còn thiếu.',
+        'Mỗi phát hiện phải ghi rõ bằng chứng quan sát được và nguồn theo mẫu: "Tên tệp – trang/vị trí". Nếu không xác định được trang, ghi đúng vị trí nhìn thấy thay vì tự tạo số trang.',
+        'Không biến việc thiếu hồ sơ thành bằng chứng gian lận. Thiếu dữ liệu chỉ dẫn đến trạng thái CẦN XÁC MINH THÊM.',
+        'Chỉ dùng trạng thái CÓ DẤU HIỆU BẤT THƯỜNG khi có mâu thuẫn hoặc dấu hiệu cụ thể quan sát được trong tài liệu.',
+        'Không khẳng định thật/giả, gian lận, hiệu lực pháp lý hoặc trách nhiệm pháp lý tuyệt đối.',
+        'Confidence phản ánh mức độ đầy đủ và rõ ràng của bằng chứng, không phải xác suất tài liệu thật.',
+        'Summary phải đưa ra một kết luận tổng hợp dễ hiểu và lời khuyên nên tiếp tục, tạm dừng hay xác minh trước khi quyết định.',
+      ].join('\n\n'),
+    }];
 
     for (const file of files) {
       const bytes = Buffer.from(await file.arrayBuffer());
-      const mime = file.type || inferMime(file.name);
-      if (mime.startsWith('text/')) {
+      const mime = inferMime(file.name, file.type);
+      const filename = safeName(file.name);
+
+      if (mime === 'text/plain') {
         content.push({
           type: 'input_text',
-          text: `\n--- TỆP: ${file.name} ---\n${bytes.toString('utf8').slice(0, 30000)}`
+          text: `\n--- TỆP VĂN BẢN: ${filename} ---\n${bytes.toString('utf8').slice(0, 50000)}`,
         });
       } else if (mime.startsWith('image/')) {
         content.push({
           type: 'input_image',
           image_url: `data:${mime};base64,${bytes.toString('base64')}`,
-          detail: 'high'
+          detail: 'high',
         });
-        content.push({ type: 'input_text', text: `Ảnh phía trên có tên tệp: ${file.name}` });
-      } else if (mime === 'application/pdf') {
+        content.push({ type: 'input_text', text: `Ảnh ngay phía trên là tệp: ${filename}` });
+      } else {
         content.push({
           type: 'input_file',
-          filename: file.name,
-          file_data: `data:application/pdf;base64,${bytes.toString('base64')}`
+          filename,
+          file_data: `data:application/pdf;base64,${bytes.toString('base64')}`,
         });
-      } else {
-        return NextResponse.json({ error: `Định dạng chưa hỗ trợ: ${file.name}` }, { status: 415 });
       }
     }
 
@@ -107,16 +111,18 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
+      signal: AbortSignal.timeout(55_000),
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || 'gpt-5-mini',
         store: false,
         instructions: [
-          'Bạn là HTL HỒ SƠ CHUẨN, trợ lý AI hỗ trợ kiểm tra độ tin cậy của hồ sơ.',
-          'Ưu tiên sự thật, bằng chứng truy xuất được và sự thận trọng.',
-          'Không thay thế giám định, công chứng, cơ quan cấp phát hoặc tư vấn pháp lý.',
-          'Chỉ trả kết quả đúng schema.'
+          'Bạn là HTL HỒ SƠ CHUẨN, trợ lý AI hỗ trợ rà soát hồ sơ doanh nghiệp và pháp lý.',
+          'Luôn phân biệt ba lớp: bằng chứng quan sát được, suy luận thận trọng và điều chưa thể kết luận.',
+          'Không bịa nội dung, trang, cơ quan, quy định hoặc kết quả xác minh bên ngoài tài liệu.',
+          'Ưu tiên ngôn ngữ tiếng Việt rõ ràng, trung tính và có hành động tiếp theo.',
+          'Chỉ trả kết quả đúng JSON schema.',
         ].join(' '),
         input: [{ role: 'user', content }],
         text: {
@@ -124,28 +130,46 @@ export async function POST(request: Request) {
             type: 'json_schema',
             name: 'document_verification_result',
             strict: true,
-            schema: resultSchema
-          }
-        }
-      })
+            schema: resultSchema,
+          },
+        },
+      }),
     });
 
     const payload = await response.json();
     if (!response.ok) {
       console.error('OpenAI error', payload);
       return NextResponse.json(
-        { error: payload?.error?.message || 'Dịch vụ AI chưa xử lý được hồ sơ.' },
-        { status: response.status }
+        { error: friendlyApiError(response.status, payload?.error?.message) },
+        { status: response.status >= 500 ? 502 : response.status },
       );
     }
 
     const outputText = extractOutputText(payload);
     if (!outputText) throw new Error('AI không trả kết quả có cấu trúc.');
-    return NextResponse.json(JSON.parse(outputText));
+
+    const result = JSON.parse(outputText);
+    if (!isValidResult(result)) throw new Error('Kết quả AI không đạt cấu trúc báo cáo yêu cầu.');
+    return NextResponse.json(result);
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Không thể xử lý phiên kiểm tra. Anh hãy thử lại.' }, { status: 500 });
+    console.error('Analyze route error', error);
+    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+    return NextResponse.json(
+      { error: timedOut ? 'Phiên phân tích quá thời gian. Anh/chị hãy giảm số lượng hoặc dung lượng tài liệu rồi thử lại.' : 'Không thể xử lý phiên kiểm tra. Anh/chị hãy thử lại.' },
+      { status: timedOut ? 504 : 500 },
+    );
   }
+}
+
+function validateFiles(files: File[]) {
+  if (!files.length) return { message: 'Thiếu tài liệu cần kiểm tra.', status: 400 };
+  if (files.length > 8) return { message: 'Bản Pilot hỗ trợ tối đa 8 tệp mỗi phiên.', status: 400 };
+  if (files.some((file) => !file.size)) return { message: 'Có tệp rỗng hoặc không đọc được.', status: 400 };
+  if (files.some((file) => file.size > MAX_FILE_BYTES)) return { message: 'Mỗi tệp tối đa 12 MB trong bản Pilot.', status: 400 };
+  if (files.reduce((total, file) => total + file.size, 0) > MAX_TOTAL_BYTES) return { message: 'Tổng dung lượng mỗi phiên tối đa 30 MB.', status: 400 };
+  const unsupported = files.find((file) => !ALLOWED_MIME.has(inferMime(file.name, file.type)));
+  if (unsupported) return { message: `Định dạng chưa hỗ trợ: ${safeName(unsupported.name)}`, status: 415 };
+  return null;
 }
 
 function extractOutputText(payload: any): string {
@@ -158,38 +182,63 @@ function extractOutputText(payload: any): string {
   return '';
 }
 
-function inferMime(name: string) {
+function inferMime(name: string, supplied = '') {
   const lower = name.toLowerCase();
   if (lower.endsWith('.pdf')) return 'application/pdf';
   if (lower.endsWith('.png')) return 'image/png';
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.txt')) return 'text/plain';
-  return 'application/octet-stream';
+  return supplied.toLowerCase() || 'application/octet-stream';
+}
+
+function safeName(name: string) {
+  return name.replace(/[\r\n\t]/g, ' ').replace(/[<>]/g, '').trim().slice(0, 180) || 'tai-lieu';
+}
+
+function friendlyApiError(status: number, detail?: string) {
+  if (status === 401) return 'Khóa OpenAI API chưa hợp lệ hoặc đã hết hiệu lực.';
+  if (status === 429) return 'Dịch vụ AI đang quá tải hoặc đã đạt giới hạn sử dụng. Anh/chị hãy thử lại sau.';
+  if (status >= 500) return 'Dịch vụ AI tạm thời chưa phản hồi. Anh/chị hãy thử lại.';
+  return detail || 'Dịch vụ AI chưa xử lý được hồ sơ.';
+}
+
+function isValidResult(value: any) {
+  const statuses = ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'];
+  return Boolean(
+    value &&
+    statuses.includes(value.status) &&
+    Number.isInteger(value.confidence) &&
+    value.confidence >= 0 && value.confidence <= 100 &&
+    typeof value.summary === 'string' &&
+    Array.isArray(value.findings) &&
+    Array.isArray(value.limitations) &&
+    Array.isArray(value.nextSteps),
+  );
 }
 
 function mockResult(files: File[], context: string) {
   return {
     status: 'CẦN XÁC MINH THÊM',
-    confidence: 72,
-    summary: `Đã tiếp nhận ${files.length} tài liệu. Hệ thống đang chạy chế độ minh họa vì chưa cấu hình OPENAI_API_KEY. Luồng kiểm tra và báo cáo đã hoạt động.`,
+    confidence: 35,
+    summary: `HTL đã tiếp nhận ${files.length} tài liệu nhưng chưa thể phân tích nội dung vì môi trường triển khai chưa cấu hình OPENAI_API_KEY. Chưa nên sử dụng kết quả này để quyết định về hồ sơ.`,
     findings: [
       {
         severity: 'TRUNG BÌNH',
         title: 'Chưa kích hoạt phân tích AI thực tế',
-        evidence: 'Các tệp đã được tiếp nhận nhưng chưa gửi đến mô hình phân tích.',
-        source: files.map((file) => file.name).join(', '),
-        recommendation: 'Thêm OPENAI_API_KEY vào Environment Variables của Vercel.'
+        evidence: 'Máy chủ không tìm thấy biến môi trường OPENAI_API_KEY nên tài liệu chưa được gửi đến mô hình phân tích.',
+        source: files.map((file) => safeName(file.name)).join(', '),
+        recommendation: 'Cấu hình OPENAI_API_KEY trong Vercel rồi chạy lại đúng bộ hồ sơ.',
       },
       {
         severity: 'THÔNG TIN',
-        title: 'Mục tiêu kiểm tra đã được ghi nhận',
-        evidence: context || 'Người dùng chưa nêu nghi ngờ cụ thể.',
+        title: 'Câu hỏi kiểm tra đã được ghi nhận',
+        evidence: context || 'Người dùng chưa nêu câu hỏi cụ thể.',
         source: 'Thông tin do người vận hành nhập',
-        recommendation: 'Nêu câu hỏi cụ thể để AI tập trung đối chiếu chính xác hơn.'
-      }
+        recommendation: 'Nêu rõ nội dung cần đối chiếu để báo cáo tập trung và hữu ích hơn.',
+      },
     ],
-    limitations: ['Đây là dữ liệu minh họa, chưa phải kết quả kiểm tra tài liệu thực tế.'],
-    nextSteps: ['Kích hoạt OpenAI API', 'Chạy lại với cùng bộ hồ sơ', 'Người vận hành xác nhận trước khi sử dụng']
+    limitations: ['Đây là thông báo vận hành, không phải kết quả rà soát nội dung tài liệu.'],
+    nextSteps: ['Cấu hình khóa OpenAI trên Vercel', 'Triển khai lại ứng dụng', 'Chạy lại cùng bộ hồ sơ và kiểm tra bằng chứng trước khi quyết định'],
   };
 }
