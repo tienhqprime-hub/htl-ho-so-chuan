@@ -3,36 +3,19 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { evaluateDossierCompletion } from '../../../lib/dossier-completion';
 import {
   ChecklistStatus,
   Dossier,
   DossierChecklistItem,
   VerificationHistoryItem,
+  ensureDossierChecklist,
   readDossiers,
-  readDossierChecklist,
   readDossierVerificationHistory,
   writeDossierChecklist,
 } from '../../../lib/dossier-storage';
 
-const defaultChecklistNames = [
-  'Giấy chứng nhận đăng ký doanh nghiệp',
-  'Điều lệ doanh nghiệp hiện hành',
-  'Giấy tờ pháp lý của người đại diện',
-  'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ',
-];
-
 const checklistStatuses: ChecklistStatus[] = ['Chưa có', 'Đã có', 'Cần bổ sung'];
-
-function createDefaultChecklist(dossierId: string): DossierChecklistItem[] {
-  return defaultChecklistNames.map((name) => ({
-    id: crypto.randomUUID(),
-    dossierId,
-    name,
-    required: true,
-    status: 'Chưa có',
-    note: '',
-  }));
-}
 
 export default function DossierDetailPage() {
   const params = useParams<{ id: string }>();
@@ -44,13 +27,9 @@ export default function DossierDetailPage() {
 
   useEffect(() => {
     const selected = readDossiers().find((item) => item.id === dossierId) || null;
-    const savedChecklist = readDossierChecklist(dossierId);
-    const initialChecklist = savedChecklist.length ? savedChecklist : createDefaultChecklist(dossierId);
-
     setDossier(selected);
     setHistory(readDossierVerificationHistory(dossierId));
-    setChecklist(initialChecklist);
-    if (!savedChecklist.length) writeDossierChecklist(dossierId, initialChecklist);
+    setChecklist(ensureDossierChecklist(dossierId, selected?.category || ''));
     setReady(true);
   }, [dossierId]);
 
@@ -69,13 +48,7 @@ export default function DossierDetailPage() {
     return `/kiem-tra?${query.toString()}`;
   }, [dossier]);
 
-  const checklistSummary = useMemo(() => {
-    const required = checklist.filter((item) => item.required);
-    const completed = required.filter((item) => item.status === 'Đã có').length;
-    const missing = required.filter((item) => item.status !== 'Đã có').length;
-    const percentage = required.length ? Math.round((completed / required.length) * 100) : 100;
-    return { required: required.length, completed, missing, percentage };
-  }, [checklist]);
+  const completion = useMemo(() => evaluateDossierCompletion(checklist), [checklist]);
 
   function addChecklistItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -158,7 +131,7 @@ export default function DossierDetailPage() {
             <h3>Tình trạng xử lý</h3>
             <p><strong>Số lần kiểm tra:</strong> {history.length}</p>
             <p><strong>Kết quả gần nhất:</strong> {history[0]?.status || 'Chưa có kết quả'}</p>
-            <p><strong>Mức độ hoàn thiện:</strong> {checklistSummary.percentage}%</p>
+            <p><strong>Mức độ hoàn thiện:</strong> {completion.percentage}%</p>
           </div>
         </div>
       </section>
@@ -166,11 +139,56 @@ export default function DossierDetailPage() {
       <section className="panel">
         <div className="resultHead">
           <div>
-            <div className="eyebrow">CHECKLIST HỒ SƠ CHUẨN</div>
-            <h2>{checklistSummary.percentage}% hoàn thiện</h2>
-            <p className="muted">Đã có {checklistSummary.completed}/{checklistSummary.required} tài liệu bắt buộc; còn {checklistSummary.missing} mục cần xử lý.</p>
+            <div className="eyebrow">ĐÁNH GIÁ TOÀN BỘ HỒ SƠ</div>
+            <h2>{completion.level}</h2>
+            <p className="leadResult">{completion.conclusion}</p>
           </div>
-          <div className="score"><strong>{checklistSummary.percentage}%</strong><span>Mức độ hoàn thiện</span></div>
+          <div className="score"><strong>{completion.percentage}%</strong><span>Mức độ hoàn thiện</span></div>
+        </div>
+
+        <div className="progressTrack"><span style={{ width: `${completion.percentage}%` }} /></div>
+
+        <div className="twoCols">
+          <div>
+            <h3>Tài liệu bắt buộc còn thiếu</h3>
+            {completion.missingRequired.length ? (
+              <ul>{completion.missingRequired.map((item) => <li key={item.id}>{item.name}</li>)}</ul>
+            ) : (
+              <p>Không còn mục bắt buộc ở trạng thái “Chưa có”.</p>
+            )}
+          </div>
+          <div>
+            <h3>Tài liệu bắt buộc cần bổ sung</h3>
+            {completion.needsSupplementRequired.length ? (
+              <ul>{completion.needsSupplementRequired.map((item) => <li key={item.id}>{item.name}</li>)}</ul>
+            ) : (
+              <p>Không còn mục bắt buộc ở trạng thái “Cần bổ sung”.</p>
+            )}
+          </div>
+        </div>
+
+        {completion.optionalOutstanding.length > 0 && (
+          <div className="notice">
+            <h3>Tài liệu bổ sung nên cân nhắc</h3>
+            <ul>{completion.optionalOutstanding.map((item) => <li key={item.id}>{item.name}</li>)}</ul>
+          </div>
+        )}
+
+        <div className="finding">
+          <h3>Khuyến nghị cho người xử lý</h3>
+          <p>{completion.recommendation}</p>
+          <p className="muted">Đánh giá này phản ánh mức độ hoàn thiện theo Checklist hiện tại; chưa khẳng định tính hợp lệ, hiệu lực hoặc khả năng được cơ quan hay đối tác chấp nhận.</p>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="resultHead">
+          <div>
+            <div className="eyebrow">CHECKLIST HỒ SƠ CHUẨN</div>
+            <h2>{completion.completedRequired}/{completion.requiredItems} tài liệu bắt buộc đã có</h2>
+            <p className="muted">Checklist được tạo theo loại hồ sơ và có thể được người phụ trách điều chỉnh theo tình huống thực tế.</p>
+          </div>
+          <div className="score"><strong>{completion.percentage}%</strong><span>Mức độ hoàn thiện</span></div>
         </div>
 
         <form className="dossierForm" onSubmit={addChecklistItem}>
@@ -210,15 +228,6 @@ export default function DossierDetailPage() {
               </div>
             </article>
           ))}
-        </div>
-
-        <div className="finding">
-          <h3>Kết luận cho người xử lý</h3>
-          <p>
-            {checklistSummary.missing === 0
-              ? 'Checklist cho thấy các tài liệu bắt buộc đã được đánh dấu là đã có. Nên thực hiện một lượt kiểm tra nội dung cuối cùng trước khi đóng hồ sơ.'
-              : `Hồ sơ còn ${checklistSummary.missing} mục bắt buộc chưa hoàn tất. Nên ưu tiên các mục đang ở trạng thái “Cần bổ sung”, sau đó xử lý các mục “Chưa có”.`}
-          </p>
         </div>
       </section>
 
