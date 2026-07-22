@@ -12,7 +12,7 @@ export default function HomePage() {
       <header className="topbar">
         <div>
           <div className="brand">HTL HỒ SƠ CHUẨN</div>
-          <div className="tagline">AI hỗ trợ kiểm tra hồ sơ cần làm rõ</div>
+          <div className="tagline">AI hỗ trợ kiểm tra và quản lý hồ sơ cần làm rõ</div>
         </div>
         <span className="pilot">BẢN PILOT</span>
       </header>
@@ -21,9 +21,12 @@ export default function HomePage() {
         <div className="eyebrow">TRỢ LÝ AI CHUYÊN SÂU VỀ HỒ SƠ</div>
         <h1>Đọc kỹ hồ sơ. Chỉ rõ bằng chứng. Nói thật giới hạn.</h1>
         <p>
-          HTL giúp anh/chị đối chiếu thông tin, phát hiện điểm chưa thống nhất và xác định việc cần làm tiếp theo mà không đưa ra kết luận vượt quá bằng chứng.
+          HTL giúp anh/chị quản lý hồ sơ, đối chiếu thông tin, phát hiện điểm chưa thống nhất và xác định việc cần làm tiếp theo mà không đưa ra kết luận vượt quá bằng chứng.
         </p>
-        <Link className="primary" href="/kiem-tra">Bắt đầu kiểm tra hồ sơ</Link>
+        <div className="heroActions">
+          <Link className="primary" href="/ho-so">Quản lý hồ sơ</Link>
+          <Link className="primary secondary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+        </div>
       </section>
 
       <section className="grid">
@@ -38,11 +41,12 @@ export default function HomePage() {
 
       <section className="panel">
         <div className="eyebrow">HTL SẼ GIÚP ANH/CHỊ</div>
-        <h2>Đọc, đối chiếu và giải thích hồ sơ theo cách dễ hiểu</h2>
+        <h2>Quản lý, đọc, đối chiếu và giải thích hồ sơ theo cách dễ hiểu</h2>
         <div className="twoCols">
           <div>
             <h3>HTL có thể</h3>
             <ul>
+              <li>Tạo và theo dõi hồ sơ theo từng doanh nghiệp hoặc khách hàng.</li>
               <li>Đọc nội dung, bảng biểu, dấu và chữ ký nhìn thấy được.</li>
               <li>Đối chiếu tên, số, ngày tháng và số liệu giữa nhiều tài liệu.</li>
               <li>Chỉ ra điểm phù hợp, mâu thuẫn, còn thiếu hoặc cần xác minh.</li>
