@@ -36,6 +36,11 @@ export type DossierChecklistItem = {
   note: string;
 };
 
+export type ChecklistSyncResult = {
+  updatedItemNames: string[];
+  unmatchedFileNames: string[];
+};
+
 export const DOSSIER_STORAGE_KEY = 'htl-dossiers-v1';
 export const VERIFICATION_HISTORY_KEY = 'htl-verification-history-v1';
 export const DOSSIER_CHECKLIST_KEY = 'htl-dossier-checklist-v1';
@@ -46,6 +51,24 @@ export const DEFAULT_CHECKLIST_NAMES = [
   'Giấy tờ pháp lý của người đại diện',
   'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ',
 ];
+
+const CHECKLIST_FILE_ALIASES: Record<string, string[]> = {
+  'Giấy chứng nhận đăng ký doanh nghiệp': ['dang ky doanh nghiep', 'dkkd', 'gcn dkkd', 'giay phep kinh doanh'],
+  'Điều lệ doanh nghiệp hiện hành': ['dieu le', 'company charter', 'charter'],
+  'Giấy tờ pháp lý của người đại diện': ['cccd', 'cmnd', 'can cuoc', 'ho chieu', 'passport', 'nguoi dai dien'],
+  'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ': ['hop dong', 'phu luc', 'quyet dinh', 'bien ban', 'van ban', 'tai lieu'],
+};
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
 export function readDossiers(): Dossier[] {
   try {
@@ -114,4 +137,36 @@ export function ensureDossierChecklist(dossierId: string): DossierChecklistItem[
 
   writeDossierChecklist(dossierId, created);
   return created;
+}
+
+export function syncUploadedFilesToChecklist(dossierId: string, fileNames: string[]): ChecklistSyncResult {
+  const checklist = ensureDossierChecklist(dossierId);
+  const matchedFileNames = new Set<string>();
+  const updatedItemNames: string[] = [];
+
+  const updatedChecklist = checklist.map((item) => {
+    const aliases = CHECKLIST_FILE_ALIASES[item.name] || [item.name];
+    const matchingFiles = fileNames.filter((fileName) => {
+      const normalizedFileName = normalizeText(fileName);
+      return aliases.some((alias) => normalizedFileName.includes(normalizeText(alias)));
+    });
+
+    if (!matchingFiles.length) return item;
+
+    matchingFiles.forEach((fileName) => matchedFileNames.add(fileName));
+    updatedItemNames.push(item.name);
+
+    return {
+      ...item,
+      status: 'Đã có' as ChecklistStatus,
+      note: `Đã ghi nhận tệp tải lên: ${matchingFiles.join(', ')}. Trạng thái này chỉ xác nhận đã tiếp nhận tài liệu; cần kiểm tra nội dung trước khi kết luận tính phù hợp.`,
+    };
+  });
+
+  writeDossierChecklist(dossierId, updatedChecklist);
+
+  return {
+    updatedItemNames,
+    unmatchedFileNames: fileNames.filter((fileName) => !matchedFileNames.has(fileName)),
+  };
 }
