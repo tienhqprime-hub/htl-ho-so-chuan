@@ -13,6 +13,19 @@ export type Dossier = {
   createdAt: string;
 };
 
+export type StoredCrossCheckStatus = 'THỐNG NHẤT' | 'KHÔNG THỐNG NHẤT' | 'CHƯA ĐỦ DỮ LIỆU';
+
+export type StoredCrossCheck = {
+  field: string;
+  status: StoredCrossCheckStatus;
+  values: Array<{
+    value: string;
+    source: string;
+  }>;
+  evidence: string;
+  recommendation: string;
+};
+
 export type VerificationHistoryItem = {
   id: string;
   dossierId: string;
@@ -25,6 +38,7 @@ export type VerificationHistoryItem = {
   status: string;
   confidence: number;
   summary: string;
+  crossChecks?: StoredCrossCheck[];
 };
 
 export type ChecklistStatus = 'Chưa có' | 'Đã có' | 'Cần bổ sung';
