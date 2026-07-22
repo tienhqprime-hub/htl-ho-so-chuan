@@ -8,6 +8,7 @@ import {
   ChecklistStatus,
   Dossier,
   DossierChecklistItem,
+  StoredCrossCheckStatus,
   VerificationHistoryItem,
   ensureDossierChecklist,
   readDossiers,
@@ -16,6 +17,12 @@ import {
 } from '../../../lib/dossier-storage';
 
 const checklistStatuses: ChecklistStatus[] = ['Chưa có', 'Đã có', 'Cần bổ sung'];
+
+const crossCheckBadge: Record<StoredCrossCheckStatus, string> = {
+  'THỐNG NHẤT': 'thông-tin',
+  'KHÔNG THỐNG NHẤT': 'cao',
+  'CHƯA ĐỦ DỮ LIỆU': 'trung-bình',
+};
 
 export default function DossierDetailPage() {
   const params = useParams<{ id: string }>();
@@ -243,17 +250,51 @@ export default function DossierDetailPage() {
         {!history.length && <div className="emptyState">Hồ sơ chưa có kết quả kiểm tra. Hãy tải tài liệu lên để HTL rà soát.</div>}
 
         <div className="historyList">
-          {history.map((entry, index) => (
-            <article className="finding" key={entry.id}>
-              <div className="resultHead">
-                <div><small>Lần kiểm tra {history.length - index} · {entry.createdAt}</small><h3>{entry.status}</h3></div>
-                <div className="score"><strong>{entry.confidence}%</strong><span>Mức độ tự tin</span></div>
-              </div>
-              <p className="leadResult">{entry.summary}</p>
-              <p><strong>Tài liệu:</strong> {entry.fileNames.join(', ') || 'Không có tên tệp'}</p>
-              <p><strong>Nội dung cần làm rõ:</strong> {entry.context || 'Không ghi thêm yêu cầu'}</p>
-            </article>
-          ))}
+          {history.map((entry, index) => {
+            const crossChecks = entry.crossChecks || [];
+            const consistent = crossChecks.filter((item) => item.status === 'THỐNG NHẤT').length;
+            const inconsistent = crossChecks.filter((item) => item.status === 'KHÔNG THỐNG NHẤT').length;
+            const insufficient = crossChecks.filter((item) => item.status === 'CHƯA ĐỦ DỮ LIỆU').length;
+
+            return (
+              <article className="finding" key={entry.id}>
+                <div className="resultHead">
+                  <div><small>Lần kiểm tra {history.length - index} · {entry.createdAt}</small><h3>{entry.status}</h3></div>
+                  <div className="score"><strong>{entry.confidence}%</strong><span>Mức độ tự tin</span></div>
+                </div>
+                <p className="leadResult">{entry.summary}</p>
+                <p><strong>Tài liệu:</strong> {entry.fileNames.join(', ') || 'Không có tên tệp'}</p>
+                <p><strong>Nội dung cần làm rõ:</strong> {entry.context || 'Không ghi thêm yêu cầu'}</p>
+
+                {crossChecks.length > 0 && (
+                  <div className="notice">
+                    <h3>Kết quả đối chiếu chéo đã lưu</h3>
+                    <p><strong>{consistent}</strong> trường thống nhất · <strong>{inconsistent}</strong> trường không thống nhất · <strong>{insufficient}</strong> trường chưa đủ dữ liệu.</p>
+                    <div className="historyList">
+                      {crossChecks.map((check, checkIndex) => (
+                        <article className="finding" key={`${entry.id}-${check.field}-${checkIndex}`}>
+                          <span className={`badge ${crossCheckBadge[check.status]}`}>{check.status}</span>
+                          <h3>{check.field}</h3>
+                          {check.values.length > 0 ? (
+                            <ul>
+                              {check.values.map((value, valueIndex) => (
+                                <li key={`${value.value}-${valueIndex}`}><strong>{value.value}</strong> — {value.source}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>Chưa có giá trị đủ rõ để so sánh.</p>
+                          )}
+                          <p><strong>Bằng chứng:</strong> {check.evidence}</p>
+                          <p><strong>Khuyến nghị:</strong> {check.recommendation}</p>
+                        </article>
+                      ))}
+                    </div>
+                    <p className="muted">Kết quả này phản ánh dữ liệu tại thời điểm kiểm tra và cần được rà soát lại khi hồ sơ có tài liệu mới hoặc tài liệu được thay thế.</p>
+                  </div>
+                )}
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>
