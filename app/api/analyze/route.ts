@@ -21,10 +21,22 @@ const documentTypes = [
   'Chưa xác định',
 ] as const;
 
+const crossCheckFields = [
+  'Tên doanh nghiệp',
+  'Mã số doanh nghiệp',
+  'Người đại diện hoặc người ký',
+  'Chức danh và thẩm quyền',
+  'Địa chỉ trụ sở',
+  'Vốn hoặc giá trị giao dịch',
+  'Ngày tháng',
+  'Số văn bản hoặc số hợp đồng',
+  'Nội dung khác',
+] as const;
+
 const resultSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['status', 'confidence', 'summary', 'documentClassifications', 'findings', 'limitations', 'nextSteps'],
+  required: ['status', 'confidence', 'summary', 'documentClassifications', 'crossChecks', 'findings', 'limitations', 'nextSteps'],
   properties: {
     status: {
       type: 'string',
@@ -43,6 +55,32 @@ const resultSchema = {
           documentType: { type: 'string', enum: documentTypes },
           confidence: { type: 'integer', minimum: 0, maximum: 100 },
           evidence: { type: 'string' },
+        },
+      },
+    },
+    crossChecks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['field', 'status', 'values', 'evidence', 'recommendation'],
+        properties: {
+          field: { type: 'string', enum: crossCheckFields },
+          status: { type: 'string', enum: ['THỐNG NHẤT', 'KHÔNG THỐNG NHẤT', 'CHƯA ĐỦ DỮ LIỆU'] },
+          values: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['value', 'source'],
+              properties: {
+                value: { type: 'string' },
+                source: { type: 'string' },
+              },
+            },
+          },
+          evidence: { type: 'string' },
+          recommendation: { type: 'string' },
         },
       },
     },
@@ -93,10 +131,12 @@ export async function POST(request: Request) {
         'NHIỆM VỤ: Rà soát bộ hồ sơ theo nguyên tắc bằng chứng trước, kết luận sau.',
         `Câu hỏi của người dùng: ${context || 'Kiểm tra tổng thể tính nhất quán, thành phần và các điểm cần xác minh.'}`,
         `Danh mục tài liệu:\n${fileManifest}`,
-        'Hãy đối chiếu giữa các tài liệu về: chủ thể, số định danh, ngày tháng, số tiền, đơn vị, thẩm quyền, chữ ký/dấu nhìn thấy được, điều khoản, phụ lục và thành phần còn thiếu.',
+        'Hãy đối chiếu chéo giữa các tài liệu về: tên doanh nghiệp, mã số doanh nghiệp, người đại diện hoặc người ký, chức danh và thẩm quyền, địa chỉ, vốn hoặc giá trị giao dịch, ngày tháng, số văn bản hoặc số hợp đồng.',
+        'Mỗi crossCheck chỉ được đánh dấu KHÔNG THỐNG NHẤT khi có ít nhất hai giá trị khác nhau quan sát được và phải ghi rõ từng giá trị cùng nguồn. Thiếu dữ liệu, không đọc rõ hoặc chỉ có một nguồn phải ghi CHƯA ĐỦ DỮ LIỆU.',
+        'Không xem khác biệt cách viết hoa, dấu câu, viết tắt hoặc định dạng ngày tương đương là mâu thuẫn nếu vẫn nhận diện được cùng một giá trị.',
         'Với từng tệp, hãy phân loại vào đúng một nhóm documentType trong schema. Chỉ phân loại khi nội dung quan sát được có căn cứ; nếu không đủ căn cứ phải chọn Chưa xác định.',
         'Mỗi documentClassifications.evidence phải nêu dấu hiệu nội dung dùng để phân loại, không chỉ lặp lại tên tệp.',
-        'Mỗi phát hiện phải ghi rõ bằng chứng quan sát được và nguồn theo mẫu: "Tên tệp – trang/vị trí". Nếu không xác định được trang, ghi đúng vị trí nhìn thấy thay vì tự tạo số trang.',
+        'Mỗi nguồn phải theo mẫu: “Tên tệp – trang/vị trí”. Nếu không xác định được trang, ghi đúng vị trí nhìn thấy thay vì tự tạo số trang.',
         'Không biến việc thiếu hồ sơ thành bằng chứng gian lận. Thiếu dữ liệu chỉ dẫn đến trạng thái CẦN XÁC MINH THÊM.',
         'Chỉ dùng trạng thái CÓ DẤU HIỆU BẤT THƯỜNG khi có mâu thuẫn hoặc dấu hiệu cụ thể quan sát được trong tài liệu.',
         'Không khẳng định thật/giả, gian lận, hiệu lực pháp lý hoặc trách nhiệm pháp lý tuyệt đối.',
@@ -229,6 +269,7 @@ function friendlyApiError(status: number, detail?: string) {
 
 function isValidResult(value: any) {
   const statuses = ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'];
+  const crossStatuses = ['THỐNG NHẤT', 'KHÔNG THỐNG NHẤT', 'CHƯA ĐỦ DỮ LIỆU'];
   return Boolean(
     value &&
     statuses.includes(value.status) &&
@@ -243,6 +284,16 @@ function isValidResult(value: any) {
       Number.isInteger(item.confidence) &&
       item.confidence >= 0 && item.confidence <= 100 &&
       typeof item.evidence === 'string'
+    ) &&
+    Array.isArray(value.crossChecks) &&
+    value.crossChecks.every((item: any) =>
+      item &&
+      crossCheckFields.includes(item.field) &&
+      crossStatuses.includes(item.status) &&
+      Array.isArray(item.values) &&
+      item.values.every((entry: any) => entry && typeof entry.value === 'string' && typeof entry.source === 'string') &&
+      typeof item.evidence === 'string' &&
+      typeof item.recommendation === 'string'
     ) &&
     Array.isArray(value.findings) &&
     Array.isArray(value.limitations) &&
@@ -260,6 +311,13 @@ function mockResult(files: File[], context: string) {
       documentType: 'Chưa xác định',
       confidence: 0,
       evidence: 'Chưa có kết quả phân tích nội dung vì máy chủ chưa cấu hình OPENAI_API_KEY.',
+    })),
+    crossChecks: crossCheckFields.map((field) => ({
+      field,
+      status: 'CHƯA ĐỦ DỮ LIỆU',
+      values: [],
+      evidence: 'Chưa có kết quả đọc nội dung tài liệu để thực hiện đối chiếu chéo.',
+      recommendation: 'Cấu hình OPENAI_API_KEY và chạy lại cùng bộ hồ sơ.',
     })),
     findings: [
       {
