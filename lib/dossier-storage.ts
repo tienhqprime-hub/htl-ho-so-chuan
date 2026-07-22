@@ -25,8 +25,20 @@ export type VerificationHistoryItem = {
   summary: string;
 };
 
+export type ChecklistStatus = 'Chưa có' | 'Đã có' | 'Cần bổ sung';
+
+export type DossierChecklistItem = {
+  id: string;
+  dossierId: string;
+  name: string;
+  required: boolean;
+  status: ChecklistStatus;
+  note: string;
+};
+
 export const DOSSIER_STORAGE_KEY = 'htl-dossiers-v1';
 export const VERIFICATION_HISTORY_KEY = 'htl-verification-history-v1';
+export const DOSSIER_CHECKLIST_KEY = 'htl-dossier-checklist-v1';
 
 export function readDossiers(): Dossier[] {
   try {
@@ -61,4 +73,21 @@ export function readDossierVerificationHistory(dossierId: string): VerificationH
 export function saveVerificationHistory(item: VerificationHistoryItem) {
   const current = readVerificationHistory();
   localStorage.setItem(VERIFICATION_HISTORY_KEY, JSON.stringify([item, ...current]));
+}
+
+export function readChecklist(): DossierChecklistItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(DOSSIER_CHECKLIST_KEY) || '[]') as DossierChecklistItem[];
+  } catch {
+    return [];
+  }
+}
+
+export function readDossierChecklist(dossierId: string): DossierChecklistItem[] {
+  return readChecklist().filter((item) => item.dossierId === dossierId);
+}
+
+export function writeDossierChecklist(dossierId: string, items: DossierChecklistItem[]) {
+  const otherItems = readChecklist().filter((item) => item.dossierId !== dossierId);
+  localStorage.setItem(DOSSIER_CHECKLIST_KEY, JSON.stringify([...items, ...otherItems]));
 }
