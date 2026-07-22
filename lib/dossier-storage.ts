@@ -46,12 +46,19 @@ export function updateDossierStatus(dossierId: string, status: DossierStatus) {
   writeDossiers(dossiers.map((item) => item.id === dossierId ? { ...item, status } : item));
 }
 
-export function saveVerificationHistory(item: VerificationHistoryItem) {
-  let current: VerificationHistoryItem[] = [];
+export function readVerificationHistory(): VerificationHistoryItem[] {
   try {
-    current = JSON.parse(localStorage.getItem(VERIFICATION_HISTORY_KEY) || '[]') as VerificationHistoryItem[];
+    return JSON.parse(localStorage.getItem(VERIFICATION_HISTORY_KEY) || '[]') as VerificationHistoryItem[];
   } catch {
-    current = [];
+    return [];
   }
+}
+
+export function readDossierVerificationHistory(dossierId: string): VerificationHistoryItem[] {
+  return readVerificationHistory().filter((item) => item.dossierId === dossierId);
+}
+
+export function saveVerificationHistory(item: VerificationHistoryItem) {
+  const current = readVerificationHistory();
   localStorage.setItem(VERIFICATION_HISTORY_KEY, JSON.stringify([item, ...current]));
 }
