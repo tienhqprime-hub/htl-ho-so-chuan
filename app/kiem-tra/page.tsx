@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 type Finding = {
@@ -19,5 +20,6 @@ type Result = {
   nextSteps: string[];
 };
 
-const severityLabel: Record<Finding['severity'], string> = {
-  'CAO': 'M
+const processSteps = [
+  'Tiếp nhận và phân loại tài liệu',
+  'Đọc nội dung, dấu, chữ
