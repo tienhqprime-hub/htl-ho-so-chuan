@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { evaluateDossierCompletion } from '../../../lib/dossier-completion';
+import { buildDossierVersions } from '../../../lib/dossier-versioning';
 import {
   ChecklistStatus,
   Dossier,
@@ -61,6 +62,12 @@ export default function DossierDetailPage() {
   );
 
   const completion = useMemo(() => evaluateDossierCompletion(checklist), [checklist]);
+  const versions = useMemo(() => buildDossierVersions(history), [history]);
+  const latestVersion = versions[0];
+  const totalImportantChanges = versions.reduce(
+    (total, version) => total + version.changes.filter((change) => change.significance === 'cao').length,
+    0
+  );
 
   function addChecklistItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -143,6 +150,7 @@ export default function DossierDetailPage() {
           <div>
             <h3>Tình trạng xử lý</h3>
             <p><strong>Số lần kiểm tra:</strong> {history.length}</p>
+            <p><strong>Phiên bản hiện tại:</strong> {latestVersion ? `v${latestVersion.version}` : 'Chưa có phiên bản'}</p>
             <p><strong>Kết quả gần nhất:</strong> {history[0]?.status || 'Chưa có kết quả'}</p>
             <p><strong>Mức độ hoàn thiện:</strong> {completion.percentage}%</p>
           </div>
@@ -252,6 +260,72 @@ export default function DossierDetailPage() {
       <section className="panel">
         <div className="resultHead">
           <div>
+            <div className="eyebrow">DÒNG THỜI GIAN PHIÊN BẢN</div>
+            <h2>{versions.length ? `${versions.length} phiên bản hồ sơ` : 'Chưa có phiên bản hồ sơ'}</h2>
+            <p className="muted">Mỗi lần kiểm tra được coi là một phiên bản. Hệ thống so sánh với lần trước để chỉ ra tài liệu và kết quả đã thay đổi.</p>
+          </div>
+          <div className="score"><strong>{totalImportantChanges}</strong><span>Thay đổi quan trọng</span></div>
+        </div>
+
+        {!versions.length && (
+          <div className="emptyState">Hãy thực hiện lần kiểm tra đầu tiên để tạo phiên bản khởi tạo của hồ sơ.</div>
+        )}
+
+        <div className="versionTimeline">
+          {versions.map((version, index) => (
+            <article className="versionEntry" key={version.id}>
+              <div className="versionMarker"><span>v{version.version}</span></div>
+              <div className="finding versionContent">
+                <div className="resultHead">
+                  <div>
+                    <small>{index === 0 ? 'PHIÊN BẢN HIỆN TẠI' : 'PHIÊN BẢN TRƯỚC'} · {version.createdAt}</small>
+                    <h3>{version.status}</h3>
+                  </div>
+                  <div className="score"><strong>{version.confidence}%</strong><span>Mức độ tự tin</span></div>
+                </div>
+
+                <p className="leadResult">{version.conclusion}</p>
+                <p>{version.summary}</p>
+
+                <div className="twoCols">
+                  <div>
+                    <h4>Tài liệu bổ sung</h4>
+                    {version.addedFiles.length ? <ul>{version.addedFiles.map((file) => <li key={file}>{file}</li>)}</ul> : <p>Không có tài liệu mới.</p>}
+                  </div>
+                  <div>
+                    <h4>Tài liệu không còn trong lần kiểm tra</h4>
+                    {version.removedFiles.length ? <ul>{version.removedFiles.map((file) => <li key={file}>{file}</li>)}</ul> : <p>Không ghi nhận.</p>}
+                  </div>
+                </div>
+
+                {version.changes.length > 0 ? (
+                  <div className="versionChanges">
+                    {version.changes.map((change, changeIndex) => (
+                      <div className="notice" key={`${version.id}-${change.type}-${changeIndex}`}>
+                        <span className={`badge ${change.significance}`}>{change.significance.toUpperCase()}</span>
+                        <h4>{change.title}</h4>
+                        <p><strong>{change.type}:</strong> {change.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">Phiên bản này chưa ghi nhận nhóm thay đổi cần phân loại thêm.</p>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="finding">
+          <h3>Kết luận cho người sử dụng</h3>
+          <p>{latestVersion ? latestVersion.conclusion : 'Chưa có dữ liệu để đánh giá sự thay đổi của hồ sơ.'}</p>
+          <p className="muted">Việc một tài liệu không xuất hiện ở lần kiểm tra sau chưa đồng nghĩa tài liệu đã bị xóa khỏi hồ sơ gốc; kết quả chỉ phản ánh tập tài liệu được cung cấp trong từng lần kiểm tra.</p>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="resultHead">
+          <div>
             <div className="eyebrow">LỊCH SỬ KIỂM TRA</div>
             <h2>{history.length ? `${history.length} lần kiểm tra đã lưu` : 'Chưa có lần kiểm tra nào'}</h2>
           </div>
@@ -308,6 +382,22 @@ export default function DossierDetailPage() {
           })}
         </div>
       </section>
+
+      <style jsx>{`
+        .versionTimeline { display: grid; gap: 0; margin-top: 22px; }
+        .versionEntry { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 18px; position: relative; padding-bottom: 22px; }
+        .versionEntry:not(:last-child)::before { content: ''; position: absolute; left: 35px; top: 50px; bottom: 0; width: 2px; background: rgba(120, 120, 120, .28); }
+        .versionMarker { display: flex; justify-content: center; position: relative; z-index: 1; }
+        .versionMarker span { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; border: 2px solid currentColor; background: var(--background, #fff); }
+        .versionContent { margin: 0; }
+        .versionChanges { display: grid; gap: 10px; margin-top: 14px; }
+        .versionChanges .notice { margin: 0; }
+        @media (max-width: 720px) {
+          .versionEntry { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; }
+          .versionEntry:not(:last-child)::before { left: 23px; }
+          .versionMarker span { width: 44px; height: 44px; font-size: .85rem; }
+        }
+      `}</style>
     </main>
   );
 }
