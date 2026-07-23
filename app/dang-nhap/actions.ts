@@ -3,23 +3,19 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 
-export type LoginState = {
-  error?: string;
-};
-
-export async function login(_state: LoginState, formData: FormData): Promise<LoginState> {
+export async function login(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim();
   const password = String(formData.get('password') ?? '');
 
   if (!email || !password) {
-    return { error: 'Vui lòng nhập đầy đủ email và mật khẩu.' };
+    redirect('/dang-nhap?error=missing');
   }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: 'Thông tin đăng nhập chưa đúng hoặc tài khoản chưa được kích hoạt.' };
+    redirect('/dang-nhap?error=invalid');
   }
 
   redirect('/ho-so');
