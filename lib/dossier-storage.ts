@@ -18,10 +18,7 @@ export type StoredCrossCheckStatus = 'THỐNG NHẤT' | 'KHÔNG THỐNG NHẤT' 
 export type StoredCrossCheck = {
   field: string;
   status: StoredCrossCheckStatus;
-  values: Array<{
-    value: string;
-    source: string;
-  }>;
+  values: Array<{ value: string; source: string }>;
   evidence: string;
   recommendation: string;
 };
@@ -55,8 +52,10 @@ export type DossierChecklistItem = {
 export type DocumentClassification = {
   fileName: string;
   documentType: string;
+  objectNature: 'HỒ SƠ CHÍNH THỨC' | 'TÀI LIỆU CÓ THỂ CẬP NHẬT' | 'CHƯA XÁC ĐỊNH';
   confidence: number;
   evidence: string;
+  handlingPrinciple: string;
 };
 
 export type ChecklistSyncResult = {
@@ -179,7 +178,6 @@ export function createDossierChecklist(dossierId: string, category: string): Dos
 export function ensureDossierChecklist(dossierId: string, category = ''): DossierChecklistItem[] {
   const current = readDossierChecklist(dossierId);
   if (current.length) return current;
-
   const dossier = readDossiers().find((item) => item.id === dossierId);
   return createDossierChecklist(dossierId, category || dossier?.category || '');
 }
@@ -227,16 +225,10 @@ export function syncUploadedFilesToChecklist(
         `AI nhận diện ${classification.fileName} (${classification.confidence}%): ${classification.evidence}`
       ));
     }
-    if (nameMatches.length) {
-      noteParts.push(`Ghi nhận dự phòng theo tên tệp: ${nameMatches.join(', ')}.`);
-    }
+    if (nameMatches.length) noteParts.push(`Ghi nhận dự phòng theo tên tệp: ${nameMatches.join(', ')}.`);
     noteParts.push('Trạng thái Đã có chỉ xác nhận đã tiếp nhận tài liệu; chưa khẳng định tài liệu còn hiệu lực, đầy đủ hoặc hợp lệ.');
 
-    return {
-      ...item,
-      status: 'Đã có' as ChecklistStatus,
-      note: noteParts.join(' '),
-    };
+    return { ...item, status: 'Đã có' as ChecklistStatus, note: noteParts.join(' ') };
   });
 
   writeDossierChecklist(dossierId, updatedChecklist);
