@@ -28,10 +28,11 @@ export type CreateDossierInput = {
   description?: string | null;
   category?: string | null;
   ownerId?: string | null;
+  status?: DossierStatus;
 };
 
 export type UpdateDossierInput = Partial<
-  Pick<Dossier, 'title' | 'description' | 'category' | 'status' | 'owner_id'>
+  Pick<Dossier, 'code' | 'title' | 'description' | 'category' | 'status' | 'owner_id'>
 >;
 
 function normalizeText(value: string, field: string): string {
@@ -83,6 +84,7 @@ export async function createDossier(
       title: normalizeText(input.title, 'Tên hồ sơ'),
       description: input.description?.trim() || null,
       category: input.category?.trim() || null,
+      status: input.status ?? 'draft',
       owner_id: input.ownerId ?? user.id,
       created_by: user.id,
     })
@@ -100,6 +102,9 @@ export async function updateDossier(
   const supabase = await createSupabaseServerClient();
   const payload: UpdateDossierInput = { ...input };
 
+  if (typeof payload.code === 'string') {
+    payload.code = normalizeText(payload.code, 'Mã hồ sơ');
+  }
   if (typeof payload.title === 'string') {
     payload.title = normalizeText(payload.title, 'Tên hồ sơ');
   }
