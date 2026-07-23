@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { createDocumentAction } from '../../actions/documents';
+import { uploadDocumentAction } from '../../actions/documents';
 import { requireEnterpriseAccess } from '../../../lib/auth/authorization';
 import { getDossier, type DossierStatus } from '../../../lib/data/dossiers';
 import {
@@ -51,11 +51,6 @@ export default async function DossierDetailPage({
   await requireEnterpriseAccess(dossier.enterprise_id);
   const documents = await listDocumentsByDossier(dossier.id);
 
-  async function createDocument(formData: FormData): Promise<void> {
-    'use server';
-    await createDocumentAction(formData);
-  }
-
   return (
     <main className="shell">
       <header className="topbar">
@@ -96,22 +91,26 @@ export default async function DossierDetailPage({
       </section>
 
       <section className="panel">
-        <div className="eyebrow">THÊM TÀI LIỆU</div>
-        <h2>Khai báo tài liệu trong hồ sơ</h2>
+        <div className="eyebrow">TẢI TÀI LIỆU LÊN</div>
+        <h2>Thêm tệp thật vào hồ sơ</h2>
         <p className="muted">
-          Bước này tạo bản ghi tài liệu trên Supabase. Upload tệp vào Storage sẽ được nối ở bước kế tiếp.
+          Hệ thống nhận PDF, Word, Excel, JPG và PNG; dung lượng tối đa 20 MB. Tệp được lưu riêng theo doanh nghiệp và hồ sơ.
         </p>
 
-        <form className="dossierForm" action={createDocument}>
+        <form className="dossierForm" action={uploadDocumentAction} encType="multipart/form-data">
           <input name="enterpriseId" type="hidden" value={dossier.enterprise_id} />
           <input name="dossierId" type="hidden" value={dossier.id} />
-          <input name="status" type="hidden" value="draft" />
-          <input name="version" type="hidden" value="1" />
-          <input name="name" placeholder="Tên tài liệu *" required />
+          <input name="name" placeholder="Tên hiển thị (để trống sẽ dùng tên tệp)" />
           <input name="documentType" placeholder="Loại tài liệu" />
           <input name="issuedAt" type="date" aria-label="Ngày cấp" />
           <input name="expiresAt" type="date" aria-label="Ngày hết hạn" />
-          <button className="primary" type="submit">Thêm tài liệu</button>
+          <input
+            name="file"
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+            required
+          />
+          <button className="primary" type="submit">Tải lên hồ sơ</button>
         </form>
       </section>
 
@@ -122,7 +121,7 @@ export default async function DossierDetailPage({
         <div className="dossierList">
           {!documents.length && (
             <div className="emptyState">
-              Hồ sơ này chưa có tài liệu. Hãy thêm tài liệu đầu tiên ở biểu mẫu phía trên.
+              Hồ sơ này chưa có tài liệu. Hãy tải tài liệu đầu tiên ở biểu mẫu phía trên.
             </div>
           )}
 
@@ -140,9 +139,9 @@ export default async function DossierDetailPage({
                 <span className="badge">{documentStatusLabels[document.status]}</span>
                 <small>Cập nhật {formatDate(document.updated_at)}</small>
                 {document.storage_path ? (
-                  <span className="primary secondary dossierAction">Đã có tệp</span>
+                  <span className="primary secondary dossierAction">Đã lưu Storage</span>
                 ) : (
-                  <span className="primary secondary dossierAction">Chưa upload tệp</span>
+                  <span className="primary secondary dossierAction">Chưa có tệp</span>
                 )}
               </div>
             </article>
