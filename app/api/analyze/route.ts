@@ -5,31 +5,38 @@ export const maxDuration = 60;
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 30 * 1024 * 1024;
-const ALLOWED_MIME = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'text/plain',
-]);
+const ALLOWED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'text/plain']);
 
 const documentTypes = [
-  'Giấy chứng nhận đăng ký doanh nghiệp',
-  'Điều lệ doanh nghiệp hiện hành',
-  'Giấy tờ pháp lý của người đại diện',
-  'Văn bản hoặc tài liệu làm căn cứ cho hồ sơ',
+  'Hóa đơn',
+  'Hợp đồng',
+  'Phụ lục hợp đồng',
+  'Đơn đặt hàng',
+  'Biên bản',
+  'Quyết định',
+  'Giấy phép hoặc giấy chứng nhận',
+  'Chứng từ xuất nhập khẩu',
+  'Quy trình làm việc',
+  'Hướng dẫn công việc',
+  'Quy định nội bộ',
+  'Biểu mẫu',
+  'Tài liệu tham khảo',
+  'Loại khác',
   'Chưa xác định',
 ] as const;
 
+const objectNatures = ['HỒ SƠ CHÍNH THỨC', 'TÀI LIỆU CÓ THỂ CẬP NHẬT', 'CHƯA XÁC ĐỊNH'] as const;
+
 const crossCheckFields = [
-  'Tên doanh nghiệp',
-  'Mã số doanh nghiệp',
+  'Tên tổ chức hoặc cá nhân',
+  'Mã số hoặc định danh',
   'Người đại diện hoặc người ký',
   'Chức danh và thẩm quyền',
-  'Địa chỉ trụ sở',
-  'Vốn hoặc giá trị giao dịch',
+  'Địa chỉ',
+  'Số tiền hoặc giá trị giao dịch',
+  'Số lượng hàng hóa hoặc dịch vụ',
   'Ngày tháng',
-  'Số văn bản hoặc số hợp đồng',
+  'Số văn bản, hợp đồng, hóa đơn hoặc đơn hàng',
   'Nội dung khác',
 ] as const;
 
@@ -38,10 +45,7 @@ const resultSchema = {
   additionalProperties: false,
   required: ['status', 'confidence', 'summary', 'documentClassifications', 'crossChecks', 'findings', 'limitations', 'nextSteps'],
   properties: {
-    status: {
-      type: 'string',
-      enum: ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'],
-    },
+    status: { type: 'string', enum: ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'] },
     confidence: { type: 'integer', minimum: 0, maximum: 100 },
     summary: { type: 'string' },
     documentClassifications: {
@@ -49,12 +53,14 @@ const resultSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['fileName', 'documentType', 'confidence', 'evidence'],
+        required: ['fileName', 'documentType', 'objectNature', 'confidence', 'evidence', 'handlingPrinciple'],
         properties: {
           fileName: { type: 'string' },
           documentType: { type: 'string', enum: documentTypes },
+          objectNature: { type: 'string', enum: objectNatures },
           confidence: { type: 'integer', minimum: 0, maximum: 100 },
           evidence: { type: 'string' },
+          handlingPrinciple: { type: 'string' },
         },
       },
     },
@@ -73,10 +79,7 @@ const resultSchema = {
               type: 'object',
               additionalProperties: false,
               required: ['value', 'source'],
-              properties: {
-                value: { type: 'string' },
-                source: { type: 'string' },
-              },
+              properties: { value: { type: 'string' }, source: { type: 'string' } },
             },
           },
           evidence: { type: 'string' },
@@ -114,7 +117,6 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const files = form.getAll('files').filter((value): value is File => value instanceof File);
     const context = String(form.get('context') || '').trim().slice(0, 4000);
-
     const validationError = validateFiles(files);
     if (validationError) return NextResponse.json({ error: validationError.message }, { status: validationError.status });
 
@@ -128,20 +130,21 @@ export async function POST(request: Request) {
     const content: InputContent[] = [{
       type: 'input_text',
       text: [
-        'NHIỆM VỤ: Rà soát bộ hồ sơ theo nguyên tắc bằng chứng trước, kết luận sau.',
-        `Câu hỏi của người dùng: ${context || 'Kiểm tra tổng thể tính nhất quán, thành phần và các điểm cần xác minh.'}`,
-        `Danh mục tài liệu:\n${fileManifest}`,
-        'Hãy đối chiếu chéo giữa các tài liệu về: tên doanh nghiệp, mã số doanh nghiệp, người đại diện hoặc người ký, chức danh và thẩm quyền, địa chỉ, vốn hoặc giá trị giao dịch, ngày tháng, số văn bản hoặc số hợp đồng.',
-        'Mỗi crossCheck chỉ được đánh dấu KHÔNG THỐNG NHẤT khi có ít nhất hai giá trị khác nhau quan sát được và phải ghi rõ từng giá trị cùng nguồn. Thiếu dữ liệu, không đọc rõ hoặc chỉ có một nguồn phải ghi CHƯA ĐỦ DỮ LIỆU.',
-        'Không xem khác biệt cách viết hoa, dấu câu, viết tắt hoặc định dạng ngày tương đương là mâu thuẫn nếu vẫn nhận diện được cùng một giá trị.',
-        'Với từng tệp, hãy phân loại vào đúng một nhóm documentType trong schema. Chỉ phân loại khi nội dung quan sát được có căn cứ; nếu không đủ căn cứ phải chọn Chưa xác định.',
-        'Mỗi documentClassifications.evidence phải nêu dấu hiệu nội dung dùng để phân loại, không chỉ lặp lại tên tệp.',
-        'Mỗi nguồn phải theo mẫu: “Tên tệp – trang/vị trí”. Nếu không xác định được trang, ghi đúng vị trí nhìn thấy thay vì tự tạo số trang.',
-        'Không biến việc thiếu hồ sơ thành bằng chứng gian lận. Thiếu dữ liệu chỉ dẫn đến trạng thái CẦN XÁC MINH THÊM.',
-        'Chỉ dùng trạng thái CÓ DẤU HIỆU BẤT THƯỜNG khi có mâu thuẫn hoặc dấu hiệu cụ thể quan sát được trong tài liệu.',
-        'Không khẳng định thật/giả, gian lận, hiệu lực pháp lý hoặc trách nhiệm pháp lý tuyệt đối.',
-        'Confidence phản ánh mức độ đầy đủ và rõ ràng của bằng chứng, không phải xác suất tài liệu thật.',
-        'Summary phải đưa ra một kết luận tổng hợp dễ hiểu và lời khuyên nên tiếp tục, tạm dừng hay xác minh trước khi quyết định.',
+        'NHIỆM VỤ: Giúp người dùng giải quyết ngay vấn đề trong một hoặc một nhóm nhỏ tài liệu đang cản trở công việc.',
+        `Vấn đề người dùng cần làm rõ: ${context || 'Kiểm tra tổng thể, chỉ ra điểm sai, thiếu, không thống nhất và việc cần làm tiếp theo.'}`,
+        `Danh mục tệp:\n${fileManifest}`,
+        'BƯỚC 1 — NHẬN DIỆN BẢN CHẤT: Với từng tệp, xác định loại cụ thể và objectNature.',
+        'HỒ SƠ CHÍNH THỨC là bằng chứng hoặc bản ghi của sự việc/giao dịch đã được phát hành, ký, đóng dấu, phê duyệt hoặc xác nhận; ví dụ hóa đơn đã phát hành, hợp đồng đã ký, biên bản đã ký, quyết định, giấy phép, chứng từ giao nhận. Không đề xuất sửa trực tiếp bản đã ban hành.',
+        'TÀI LIỆU CÓ THỂ CẬP NHẬT là nội dung dùng để hướng dẫn, vận hành hoặc cải tiến; ví dụ quy trình, hướng dẫn, quy định nội bộ, biểu mẫu chưa phát hành. Có thể đề xuất chỉnh sửa và phát hành phiên bản mới theo thẩm quyền.',
+        'Nếu không đủ dấu hiệu để xác định trạng thái ban hành hoặc bản chất, chọn CHƯA XÁC ĐỊNH; không suy đoán từ tên tệp.',
+        'handlingPrinciple phải nói rõ cách xử lý đúng. Với HỒ SƠ CHÍNH THỨC: không hướng dẫn tẩy xóa, ghi đè hay sửa file gốc; hãy đề nghị xác minh, lập bản điều chỉnh/thay thế/đính chính/hủy theo quy trình áp dụng hoặc yêu cầu bên phát hành xử lý. Với TÀI LIỆU CÓ THỂ CẬP NHẬT: có thể đề xuất nội dung cần sửa và quản lý phiên bản.',
+        'BƯỚC 2 — ĐỐI CHIẾU: Chỉ đánh dấu KHÔNG THỐNG NHẤT khi quan sát được ít nhất hai giá trị khác nhau từ nguồn cụ thể. Không đọc rõ, thiếu dữ liệu hoặc chỉ có một nguồn phải ghi CHƯA ĐỦ DỮ LIỆU.',
+        'Không coi khác biệt viết hoa, dấu câu, viết tắt hoặc định dạng tương đương là mâu thuẫn khi vẫn là cùng một giá trị.',
+        'BƯỚC 3 — KẾT LUẬN: Summary phải trả lời ngắn gọn: vấn đề chính là gì, có nên tiếp tục công việc hay cần tạm dừng để xác minh.',
+        'BƯỚC 4 — HÀNH ĐỘNG: Recommendation và nextSteps phải thực tế, theo thứ tự ưu tiên, giúp người dùng biết việc cần làm ngay. Tuyệt đối không đề xuất sửa trực tiếp hồ sơ chính thức đã ban hành.',
+        'Mỗi nguồn theo mẫu “Tên tệp – trang/vị trí”. Nếu không xác định được trang, ghi vị trí quan sát được; không tự tạo số trang.',
+        'Không biến thiếu hồ sơ thành bằng chứng gian lận. Không khẳng định thật/giả, gian lận, hiệu lực pháp lý hoặc trách nhiệm pháp lý tuyệt đối.',
+        'Confidence phản ánh độ đầy đủ và rõ của bằng chứng, không phải xác suất tài liệu thật.',
       ].join('\n\n'),
     }];
 
@@ -149,71 +152,46 @@ export async function POST(request: Request) {
       const bytes = Buffer.from(await file.arrayBuffer());
       const mime = inferMime(file.name, file.type);
       const filename = safeName(file.name);
-
       if (mime === 'text/plain') {
-        content.push({
-          type: 'input_text',
-          text: `\n--- TỆP VĂN BẢN: ${filename} ---\n${bytes.toString('utf8').slice(0, 50000)}`,
-        });
+        content.push({ type: 'input_text', text: `\n--- TỆP VĂN BẢN: ${filename} ---\n${bytes.toString('utf8').slice(0, 50000)}` });
       } else if (mime.startsWith('image/')) {
-        content.push({
-          type: 'input_image',
-          image_url: `data:${mime};base64,${bytes.toString('base64')}`,
-          detail: 'high',
-        });
+        content.push({ type: 'input_image', image_url: `data:${mime};base64,${bytes.toString('base64')}`, detail: 'high' });
         content.push({ type: 'input_text', text: `Ảnh ngay phía trên là tệp: ${filename}` });
       } else {
-        content.push({
-          type: 'input_file',
-          filename,
-          file_data: `data:application/pdf;base64,${bytes.toString('base64')}`,
-        });
+        content.push({ type: 'input_file', filename, file_data: `data:application/pdf;base64,${bytes.toString('base64')}` });
       }
     }
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       signal: AbortSignal.timeout(55_000),
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || 'gpt-5-mini',
         store: false,
         instructions: [
-          'Bạn là HTL HỒ SƠ CHUẨN, trợ lý AI hỗ trợ rà soát hồ sơ doanh nghiệp và pháp lý.',
-          'Luôn phân biệt ba lớp: bằng chứng quan sát được, suy luận thận trọng và điều chưa thể kết luận.',
+          'Bạn là HTL HỒ SƠ CHUẨN, trợ lý AI hỗ trợ người dùng giải quyết vấn đề thực tế trong tài liệu doanh nghiệp và pháp lý.',
+          'Luôn phân biệt hồ sơ chính thức không được tự ý sửa với tài liệu có thể cập nhật theo phiên bản.',
+          'Luôn tách bằng chứng quan sát được, suy luận thận trọng và điều chưa thể kết luận.',
           'Không bịa nội dung, trang, cơ quan, quy định hoặc kết quả xác minh bên ngoài tài liệu.',
-          'Ưu tiên ngôn ngữ tiếng Việt rõ ràng, trung tính và có hành động tiếp theo.',
+          'Dùng tiếng Việt rõ ràng, ngắn gọn, hướng đến hành động tiếp theo.',
           'Chỉ trả kết quả đúng JSON schema.',
         ].join(' '),
         input: [{ role: 'user', content }],
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'document_verification_result',
-            strict: true,
-            schema: resultSchema,
-          },
-        },
+        text: { format: { type: 'json_schema', name: 'document_verification_result', strict: true, schema: resultSchema } },
       }),
     });
 
     const payload = await response.json();
     if (!response.ok) {
       console.error('OpenAI error', payload);
-      return NextResponse.json(
-        { error: friendlyApiError(response.status, payload?.error?.message) },
-        { status: response.status >= 500 ? 502 : response.status },
-      );
+      return NextResponse.json({ error: friendlyApiError(response.status, payload?.error?.message) }, { status: response.status >= 500 ? 502 : response.status });
     }
 
     const outputText = extractOutputText(payload);
     if (!outputText) throw new Error('AI không trả kết quả có cấu trúc.');
-
     const result = JSON.parse(outputText);
-    if (!isValidResult(result)) throw new Error('Kết quả AI không đạt cấu trúc báo cáo yêu cầu.');
+    if (!isValidResult(result)) throw new Error('Kết quả AI không đạt cấu trúc yêu cầu.');
     return NextResponse.json(result);
   } catch (error) {
     console.error('Analyze route error', error);
@@ -264,40 +242,18 @@ function friendlyApiError(status: number, detail?: string) {
   if (status === 401) return 'Khóa OpenAI API chưa hợp lệ hoặc đã hết hiệu lực.';
   if (status === 429) return 'Dịch vụ AI đang quá tải hoặc đã đạt giới hạn sử dụng. Anh/chị hãy thử lại sau.';
   if (status >= 500) return 'Dịch vụ AI tạm thời chưa phản hồi. Anh/chị hãy thử lại.';
-  return detail || 'Dịch vụ AI chưa xử lý được hồ sơ.';
+  return detail || 'Dịch vụ AI chưa xử lý được tài liệu.';
 }
 
 function isValidResult(value: any) {
   const statuses = ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'];
   const crossStatuses = ['THỐNG NHẤT', 'KHÔNG THỐNG NHẤT', 'CHƯA ĐỦ DỮ LIỆU'];
   return Boolean(
-    value &&
-    statuses.includes(value.status) &&
-    Number.isInteger(value.confidence) &&
-    value.confidence >= 0 && value.confidence <= 100 &&
-    typeof value.summary === 'string' &&
-    Array.isArray(value.documentClassifications) &&
-    value.documentClassifications.every((item: any) =>
-      item &&
-      typeof item.fileName === 'string' &&
-      documentTypes.includes(item.documentType) &&
-      Number.isInteger(item.confidence) &&
-      item.confidence >= 0 && item.confidence <= 100 &&
-      typeof item.evidence === 'string'
-    ) &&
-    Array.isArray(value.crossChecks) &&
-    value.crossChecks.every((item: any) =>
-      item &&
-      crossCheckFields.includes(item.field) &&
-      crossStatuses.includes(item.status) &&
-      Array.isArray(item.values) &&
-      item.values.every((entry: any) => entry && typeof entry.value === 'string' && typeof entry.source === 'string') &&
-      typeof item.evidence === 'string' &&
-      typeof item.recommendation === 'string'
-    ) &&
-    Array.isArray(value.findings) &&
-    Array.isArray(value.limitations) &&
-    Array.isArray(value.nextSteps),
+    value && statuses.includes(value.status) && Number.isInteger(value.confidence) && value.confidence >= 0 && value.confidence <= 100 &&
+    typeof value.summary === 'string' && Array.isArray(value.documentClassifications) &&
+    value.documentClassifications.every((item: any) => item && typeof item.fileName === 'string' && documentTypes.includes(item.documentType) && objectNatures.includes(item.objectNature) && Number.isInteger(item.confidence) && item.confidence >= 0 && item.confidence <= 100 && typeof item.evidence === 'string' && typeof item.handlingPrinciple === 'string') &&
+    Array.isArray(value.crossChecks) && value.crossChecks.every((item: any) => item && crossCheckFields.includes(item.field) && crossStatuses.includes(item.status) && Array.isArray(item.values) && item.values.every((entry: any) => entry && typeof entry.value === 'string' && typeof entry.source === 'string') && typeof item.evidence === 'string' && typeof item.recommendation === 'string') &&
+    Array.isArray(value.findings) && Array.isArray(value.limitations) && Array.isArray(value.nextSteps),
   );
 }
 
@@ -305,37 +261,39 @@ function mockResult(files: File[], context: string) {
   return {
     status: 'CẦN XÁC MINH THÊM',
     confidence: 35,
-    summary: `HTL đã tiếp nhận ${files.length} tài liệu nhưng chưa thể phân tích nội dung vì môi trường triển khai chưa cấu hình OPENAI_API_KEY. Chưa nên sử dụng kết quả này để quyết định về hồ sơ.`,
+    summary: `HTL đã tiếp nhận ${files.length} tài liệu nhưng chưa thể đọc nội dung vì môi trường triển khai chưa cấu hình OPENAI_API_KEY.`,
     documentClassifications: files.map((file) => ({
       fileName: safeName(file.name),
       documentType: 'Chưa xác định',
+      objectNature: 'CHƯA XÁC ĐỊNH',
       confidence: 0,
-      evidence: 'Chưa có kết quả phân tích nội dung vì máy chủ chưa cấu hình OPENAI_API_KEY.',
+      evidence: 'Chưa có kết quả phân tích nội dung.',
+      handlingPrinciple: 'Không sửa trực tiếp tệp gốc cho đến khi xác định đây là hồ sơ chính thức hay tài liệu có thể cập nhật.',
     })),
     crossChecks: crossCheckFields.map((field) => ({
       field,
       status: 'CHƯA ĐỦ DỮ LIỆU',
       values: [],
-      evidence: 'Chưa có kết quả đọc nội dung tài liệu để thực hiện đối chiếu chéo.',
-      recommendation: 'Cấu hình OPENAI_API_KEY và chạy lại cùng bộ hồ sơ.',
+      evidence: 'Chưa có kết quả đọc nội dung để đối chiếu.',
+      recommendation: 'Cấu hình OPENAI_API_KEY và chạy lại tài liệu.',
     })),
     findings: [
       {
         severity: 'TRUNG BÌNH',
         title: 'Chưa kích hoạt phân tích AI thực tế',
-        evidence: 'Máy chủ không tìm thấy biến môi trường OPENAI_API_KEY nên tài liệu chưa được gửi đến mô hình phân tích.',
+        evidence: 'Máy chủ không tìm thấy biến môi trường OPENAI_API_KEY.',
         source: files.map((file) => safeName(file.name)).join(', '),
-        recommendation: 'Cấu hình OPENAI_API_KEY trong Vercel rồi chạy lại đúng bộ hồ sơ.',
+        recommendation: 'Cấu hình OPENAI_API_KEY trên Vercel rồi chạy lại.',
       },
       {
         severity: 'THÔNG TIN',
-        title: 'Câu hỏi kiểm tra đã được ghi nhận',
-        evidence: context || 'Người dùng chưa nêu câu hỏi cụ thể.',
-        source: 'Thông tin do người vận hành nhập',
-        recommendation: 'Nêu rõ nội dung cần đối chiếu để báo cáo tập trung và hữu ích hơn.',
+        title: 'Vấn đề cần làm rõ đã được ghi nhận',
+        evidence: context || 'Người dùng chưa nêu vấn đề cụ thể.',
+        source: 'Thông tin người dùng nhập',
+        recommendation: 'Nêu rõ điểm đang mắc để kết quả tập trung hơn.',
       },
     ],
-    limitations: ['Đây là thông báo vận hành, không phải kết quả rà soát nội dung tài liệu.'],
-    nextSteps: ['Cấu hình khóa OpenAI trên Vercel', 'Triển khai lại ứng dụng', 'Chạy lại cùng bộ hồ sơ và kiểm tra bằng chứng trước khi quyết định'],
+    limitations: ['Đây là thông báo vận hành, chưa phải kết quả kiểm tra nội dung.'],
+    nextSteps: ['Cấu hình khóa OpenAI trên Vercel', 'Triển khai lại ứng dụng', 'Chạy lại tài liệu và kiểm tra bằng chứng trước khi quyết định'],
   };
 }
