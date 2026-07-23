@@ -26,6 +26,7 @@ const documentTypes = [
 ] as const;
 
 const objectNatures = ['HỒ SƠ CHÍNH THỨC', 'TÀI LIỆU CÓ THỂ CẬP NHẬT', 'CHƯA XÁC ĐỊNH'] as const;
+const workflowModes = ['SỬA TÀI LIỆU', 'LÀM RÕ HỒ SƠ', 'HỖN HỢP', 'CHƯA XÁC ĐỊNH'] as const;
 
 const crossCheckFields = [
   'Tên tổ chức hoặc cá nhân',
@@ -43,8 +44,9 @@ const crossCheckFields = [
 const resultSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['status', 'confidence', 'summary', 'documentClassifications', 'crossChecks', 'findings', 'limitations', 'nextSteps'],
+  required: ['workflowMode', 'status', 'confidence', 'summary', 'documentClassifications', 'crossChecks', 'findings', 'limitations', 'nextSteps'],
   properties: {
+    workflowMode: { type: 'string', enum: workflowModes },
     status: { type: 'string', enum: ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'] },
     confidence: { type: 'integer', minimum: 0, maximum: 100 },
     summary: { type: 'string' },
@@ -130,18 +132,21 @@ export async function POST(request: Request) {
     const content: InputContent[] = [{
       type: 'input_text',
       text: [
-        'NHIỆM VỤ: Giúp người dùng giải quyết ngay vấn đề trong một hoặc một nhóm nhỏ tài liệu đang cản trở công việc.',
-        `Vấn đề người dùng cần làm rõ: ${context || 'Kiểm tra tổng thể, chỉ ra điểm sai, thiếu, không thống nhất và việc cần làm tiếp theo.'}`,
+        'NHIỆM VỤ CỐT LÕI: Sau khi nhận tệp, phải xác định đúng một trong hai quy trình nghiệp vụ chính của HTL.',
+        'QUY TRÌNH SỬA TÀI LIỆU: áp dụng cho tài liệu có thể cập nhật. Mục tiêu là làm rõ tài liệu cần sửa chỗ nào để đúng, rõ và sử dụng được. Mỗi finding phải chỉ rõ nội dung hiện tại, nội dung đề nghị sửa và lý do. recommendation phải là câu hoặc nội dung thay thế cụ thể khi có đủ căn cứ, không chỉ nói chung chung “cần chỉnh sửa”.',
+        'QUY TRÌNH LÀM RÕ HỒ SƠ: áp dụng cho hồ sơ chính thức. Mục tiêu là làm rõ hồ sơ đang vướng ở điểm nào: thiếu gì, sai gì, không thống nhất ở đâu, chưa đủ căn cứ gì và cần xử lý theo thủ tục nào. Không viết lại hoặc đề nghị sửa trực tiếp bản gốc đã ký, đóng dấu, phát hành hay xác nhận.',
+        'Nếu bộ tệp có cả hai bản chất, chọn workflowMode HỖN HỢP và xử lý từng tệp theo đúng bản chất. Nếu chưa đủ căn cứ, chọn CHƯA XÁC ĐỊNH.',
+        `Vấn đề người dùng cần làm rõ: ${context || 'Kiểm tra tổng thể, chỉ ra điểm cần sửa hoặc điểm hồ sơ đang vướng và việc cần làm tiếp theo.'}`,
         `Danh mục tệp:\n${fileManifest}`,
-        'BƯỚC 1 — NHẬN DIỆN BẢN CHẤT: Với từng tệp, xác định loại cụ thể và objectNature.',
-        'HỒ SƠ CHÍNH THỨC là bằng chứng hoặc bản ghi của sự việc/giao dịch đã được phát hành, ký, đóng dấu, phê duyệt hoặc xác nhận; ví dụ hóa đơn đã phát hành, hợp đồng đã ký, biên bản đã ký, quyết định, giấy phép, chứng từ giao nhận. Không đề xuất sửa trực tiếp bản đã ban hành.',
-        'TÀI LIỆU CÓ THỂ CẬP NHẬT là nội dung dùng để hướng dẫn, vận hành hoặc cải tiến; ví dụ quy trình, hướng dẫn, quy định nội bộ, biểu mẫu chưa phát hành. Có thể đề xuất chỉnh sửa và phát hành phiên bản mới theo thẩm quyền.',
-        'Nếu không đủ dấu hiệu để xác định trạng thái ban hành hoặc bản chất, chọn CHƯA XÁC ĐỊNH; không suy đoán từ tên tệp.',
-        'handlingPrinciple phải nói rõ cách xử lý đúng. Với HỒ SƠ CHÍNH THỨC: không hướng dẫn tẩy xóa, ghi đè hay sửa file gốc; hãy đề nghị xác minh, lập bản điều chỉnh/thay thế/đính chính/hủy theo quy trình áp dụng hoặc yêu cầu bên phát hành xử lý. Với TÀI LIỆU CÓ THỂ CẬP NHẬT: có thể đề xuất nội dung cần sửa và quản lý phiên bản.',
-        'BƯỚC 2 — ĐỐI CHIẾU: Chỉ đánh dấu KHÔNG THỐNG NHẤT khi quan sát được ít nhất hai giá trị khác nhau từ nguồn cụ thể. Không đọc rõ, thiếu dữ liệu hoặc chỉ có một nguồn phải ghi CHƯA ĐỦ DỮ LIỆU.',
+        'BƯỚC 1 — NHẬN DIỆN: Với từng tệp, xác định documentType, objectNature và handlingPrinciple; sau đó chọn workflowMode cho toàn bộ phiên.',
+        'HỒ SƠ CHÍNH THỨC là bằng chứng hoặc bản ghi của sự việc/giao dịch đã được phát hành, ký, đóng dấu, phê duyệt hoặc xác nhận; ví dụ hóa đơn đã phát hành, hợp đồng đã ký, biên bản đã ký, quyết định, giấy phép, chứng từ giao nhận.',
+        'TÀI LIỆU CÓ THỂ CẬP NHẬT là nội dung dùng để soạn thảo, hướng dẫn, vận hành hoặc cải tiến; ví dụ dự thảo, quy trình, hướng dẫn, quy định nội bộ, biểu mẫu chưa phát hành.',
+        'Không suy đoán trạng thái chỉ từ tên tệp. Nếu không đủ dấu hiệu, chọn CHƯA XÁC ĐỊNH.',
+        'BƯỚC 2 — PHÂN TÍCH ĐÚNG NHÁNH: Với SỬA TÀI LIỆU, ưu tiên lỗi nội dung, câu chữ, cấu trúc, logic, nghiệp vụ, thiếu thông tin và đề nghị viết đúng. Với LÀM RÕ HỒ SƠ, ưu tiên tính đầy đủ, nhất quán, bằng chứng, thẩm quyền, trạng thái và thủ tục xử lý.',
+        'BƯỚC 3 — ĐỐI CHIẾU: Chỉ đánh dấu KHÔNG THỐNG NHẤT khi quan sát được ít nhất hai giá trị khác nhau từ nguồn cụ thể. Không đọc rõ, thiếu dữ liệu hoặc chỉ có một nguồn phải ghi CHƯA ĐỦ DỮ LIỆU.',
         'Không coi khác biệt viết hoa, dấu câu, viết tắt hoặc định dạng tương đương là mâu thuẫn khi vẫn là cùng một giá trị.',
-        'BƯỚC 3 — KẾT LUẬN: Summary phải trả lời ngắn gọn: vấn đề chính là gì, có nên tiếp tục công việc hay cần tạm dừng để xác minh.',
-        'BƯỚC 4 — HÀNH ĐỘNG: Recommendation và nextSteps phải thực tế, theo thứ tự ưu tiên, giúp người dùng biết việc cần làm ngay. Tuyệt đối không đề xuất sửa trực tiếp hồ sơ chính thức đã ban hành.',
+        'BƯỚC 4 — KẾT LUẬN: Summary phải trả lời đúng nhánh. Với tài liệu: cần sửa gì để đúng. Với hồ sơ: đang vướng ở đâu và có thể tiếp tục hay phải tạm dừng để xác minh.',
+        'BƯỚC 5 — LƯU VÀ TRẢ KẾT QUẢ: Kết quả phải đủ rõ để hệ thống lưu lịch sử và người dùng có thể thực hiện ngay nextSteps theo thứ tự ưu tiên.',
         'Mỗi nguồn theo mẫu “Tên tệp – trang/vị trí”. Nếu không xác định được trang, ghi vị trí quan sát được; không tự tạo số trang.',
         'Không biến thiếu hồ sơ thành bằng chứng gian lận. Không khẳng định thật/giả, gian lận, hiệu lực pháp lý hoặc trách nhiệm pháp lý tuyệt đối.',
         'Confidence phản ánh độ đầy đủ và rõ của bằng chứng, không phải xác suất tài liệu thật.',
@@ -170,8 +175,9 @@ export async function POST(request: Request) {
         model: process.env.OPENAI_MODEL || 'gpt-5-mini',
         store: false,
         instructions: [
-          'Bạn là HTL HỒ SƠ CHUẨN, trợ lý AI hỗ trợ người dùng giải quyết vấn đề thực tế trong tài liệu doanh nghiệp và pháp lý.',
-          'Luôn phân biệt hồ sơ chính thức không được tự ý sửa với tài liệu có thể cập nhật theo phiên bản.',
+          'Bạn là HTL HỒ SƠ CHUẨN.',
+          'Sau khi nhận tệp, bắt buộc chọn đúng quy trình: sửa tài liệu để viết đúng hoặc làm rõ hồ sơ đang vướng ở đâu.',
+          'Tài liệu có thể cập nhật thì đề xuất sửa cụ thể. Hồ sơ chính thức thì không tự ý sửa bản gốc, chỉ nêu điểm vướng và cách xử lý đúng.',
           'Luôn tách bằng chứng quan sát được, suy luận thận trọng và điều chưa thể kết luận.',
           'Không bịa nội dung, trang, cơ quan, quy định hoặc kết quả xác minh bên ngoài tài liệu.',
           'Dùng tiếng Việt rõ ràng, ngắn gọn, hướng đến hành động tiếp theo.',
@@ -249,7 +255,7 @@ function isValidResult(value: any) {
   const statuses = ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'];
   const crossStatuses = ['THỐNG NHẤT', 'KHÔNG THỐNG NHẤT', 'CHƯA ĐỦ DỮ LIỆU'];
   return Boolean(
-    value && statuses.includes(value.status) && Number.isInteger(value.confidence) && value.confidence >= 0 && value.confidence <= 100 &&
+    value && workflowModes.includes(value.workflowMode) && statuses.includes(value.status) && Number.isInteger(value.confidence) && value.confidence >= 0 && value.confidence <= 100 &&
     typeof value.summary === 'string' && Array.isArray(value.documentClassifications) &&
     value.documentClassifications.every((item: any) => item && typeof item.fileName === 'string' && documentTypes.includes(item.documentType) && objectNatures.includes(item.objectNature) && Number.isInteger(item.confidence) && item.confidence >= 0 && item.confidence <= 100 && typeof item.evidence === 'string' && typeof item.handlingPrinciple === 'string') &&
     Array.isArray(value.crossChecks) && value.crossChecks.every((item: any) => item && crossCheckFields.includes(item.field) && crossStatuses.includes(item.status) && Array.isArray(item.values) && item.values.every((entry: any) => entry && typeof entry.value === 'string' && typeof entry.source === 'string') && typeof item.evidence === 'string' && typeof item.recommendation === 'string') &&
@@ -259,9 +265,10 @@ function isValidResult(value: any) {
 
 function mockResult(files: File[], context: string) {
   return {
+    workflowMode: 'CHƯA XÁC ĐỊNH',
     status: 'CẦN XÁC MINH THÊM',
     confidence: 35,
-    summary: `HTL đã tiếp nhận ${files.length} tài liệu nhưng chưa thể đọc nội dung vì môi trường triển khai chưa cấu hình OPENAI_API_KEY.`,
+    summary: `HTL đã tiếp nhận ${files.length} tài liệu nhưng chưa thể xác định quy trình sửa tài liệu hay làm rõ hồ sơ vì môi trường triển khai chưa cấu hình OPENAI_API_KEY.`,
     documentClassifications: files.map((file) => ({
       fileName: safeName(file.name),
       documentType: 'Chưa xác định',
@@ -290,7 +297,7 @@ function mockResult(files: File[], context: string) {
         title: 'Vấn đề cần làm rõ đã được ghi nhận',
         evidence: context || 'Người dùng chưa nêu vấn đề cụ thể.',
         source: 'Thông tin người dùng nhập',
-        recommendation: 'Nêu rõ điểm đang mắc để kết quả tập trung hơn.',
+        recommendation: 'Nêu rõ tài liệu cần sửa gì hoặc hồ sơ đang vướng ở đâu để kết quả tập trung hơn.',
       },
     ],
     limitations: ['Đây là thông báo vận hành, chưa phải kết quả kiểm tra nội dung.'],
