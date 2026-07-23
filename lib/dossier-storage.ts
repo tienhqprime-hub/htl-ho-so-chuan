@@ -1,6 +1,7 @@
 import { GENERAL_DOSSIER_TEMPLATE, getDossierRuleTemplate } from './dossier-rules';
 
 export type DossierStatus = 'Mới tiếp nhận' | 'Đang kiểm tra' | 'Chờ bổ sung' | 'Hoàn thành' | 'Đã đóng';
+export type WorkflowMode = 'SỬA TÀI LIỆU' | 'LÀM RÕ HỒ SƠ' | 'HỖN HỢP' | 'CHƯA XÁC ĐỊNH';
 
 export type Dossier = {
   id: string;
@@ -32,6 +33,7 @@ export type VerificationHistoryItem = {
   createdAt: string;
   fileNames: string[];
   context: string;
+  workflowMode?: WorkflowMode;
   status: string;
   confidence: number;
   summary: string;
