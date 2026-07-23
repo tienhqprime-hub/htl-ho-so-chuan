@@ -27,6 +27,7 @@ const documentTypes = [
 
 const objectNatures = ['HỒ SƠ CHÍNH THỨC', 'TÀI LIỆU CÓ THỂ CẬP NHẬT', 'CHƯA XÁC ĐỊNH'] as const;
 const workflowModes = ['SỬA TÀI LIỆU', 'LÀM RÕ HỒ SƠ', 'HỖN HỢP', 'CHƯA XÁC ĐỊNH'] as const;
+const actionPriorities = ['LÀM NGAY', 'LÀM TIẾP', 'THEO DÕI'] as const;
 
 const crossCheckFields = [
   'Tên tổ chức hoặc cá nhân',
@@ -44,7 +45,7 @@ const crossCheckFields = [
 const resultSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['workflowMode', 'status', 'confidence', 'summary', 'documentClassifications', 'crossChecks', 'findings', 'limitations', 'nextSteps'],
+  required: ['workflowMode', 'status', 'confidence', 'summary', 'documentClassifications', 'crossChecks', 'findings', 'limitations', 'nextSteps', 'actionPlan', 'completionCondition'],
   properties: {
     workflowMode: { type: 'string', enum: workflowModes },
     status: { type: 'string', enum: ['CÓ CƠ SỞ TIN CẬY', 'CẦN XÁC MINH THÊM', 'CÓ DẤU HIỆU BẤT THƯỜNG'] },
@@ -106,6 +107,22 @@ const resultSchema = {
     },
     limitations: { type: 'array', items: { type: 'string' } },
     nextSteps: { type: 'array', items: { type: 'string' } },
+    actionPlan: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['order', 'priority', 'action', 'reason', 'completionEvidence'],
+        properties: {
+          order: { type: 'integer', minimum: 1 },
+          priority: { type: 'string', enum: actionPriorities },
+          action: { type: 'string' },
+          reason: { type: 'string' },
+          completionEvidence: { type: 'string' },
+        },
+      },
+    },
+    completionCondition: { type: 'string' },
   },
 } as const;
 
@@ -146,7 +163,9 @@ export async function POST(request: Request) {
         'BƯỚC 3 — ĐỐI CHIẾU: Chỉ đánh dấu KHÔNG THỐNG NHẤT khi quan sát được ít nhất hai giá trị khác nhau từ nguồn cụ thể. Không đọc rõ, thiếu dữ liệu hoặc chỉ có một nguồn phải ghi CHƯA ĐỦ DỮ LIỆU.',
         'Không coi khác biệt viết hoa, dấu câu, viết tắt hoặc định dạng tương đương là mâu thuẫn khi vẫn là cùng một giá trị.',
         'BƯỚC 4 — KẾT LUẬN: Summary phải trả lời đúng nhánh. Với tài liệu: cần sửa gì để đúng. Với hồ sơ: đang vướng ở đâu và có thể tiếp tục hay phải tạm dừng để xác minh.',
-        'BƯỚC 5 — LƯU VÀ TRẢ KẾT QUẢ: Kết quả phải đủ rõ để hệ thống lưu lịch sử và người dùng có thể thực hiện ngay nextSteps theo thứ tự ưu tiên.',
+        'BƯỚC 5 — LẬP KẾ HOẠCH XỬ LÝ: Tạo actionPlan theo đúng thứ tự thực hiện. Mỗi bước phải có mức ưu tiên LÀM NGAY, LÀM TIẾP hoặc THEO DÕI; nêu hành động cụ thể, lý do và bằng chứng dùng để xác nhận đã hoàn thành. Không lặp lại finding bằng câu chữ chung chung.',
+        'BƯỚC 6 — ĐIỀU KIỆN HOÀN THÀNH: completionCondition phải nêu trạng thái kiểm chứng được để biết khi nào tài liệu có thể sử dụng hoặc hồ sơ có thể tiếp tục xử lý; không khẳng định đủ điều kiện pháp lý tuyệt đối khi chưa có căn cứ.',
+        'BƯỚC 7 — LƯU VÀ TRẢ KẾT QUẢ: Kết quả phải đủ rõ để hệ thống lưu lịch sử và người dùng có thể thực hiện ngay theo thứ tự ưu tiên.',
         'Mỗi nguồn theo mẫu “Tên tệp – trang/vị trí”. Nếu không xác định được trang, ghi vị trí quan sát được; không tự tạo số trang.',
         'Không biến thiếu hồ sơ thành bằng chứng gian lận. Không khẳng định thật/giả, gian lận, hiệu lực pháp lý hoặc trách nhiệm pháp lý tuyệt đối.',
         'Confidence phản ánh độ đầy đủ và rõ của bằng chứng, không phải xác suất tài liệu thật.',
@@ -178,6 +197,7 @@ export async function POST(request: Request) {
           'Bạn là HTL HỒ SƠ CHUẨN.',
           'Sau khi nhận tệp, bắt buộc chọn đúng quy trình: sửa tài liệu để viết đúng hoặc làm rõ hồ sơ đang vướng ở đâu.',
           'Tài liệu có thể cập nhật thì đề xuất sửa cụ thể. Hồ sơ chính thức thì không tự ý sửa bản gốc, chỉ nêu điểm vướng và cách xử lý đúng.',
+          'Sau phân tích, phải lập kế hoạch hành động có thứ tự ưu tiên và điều kiện hoàn thành kiểm chứng được.',
           'Luôn tách bằng chứng quan sát được, suy luận thận trọng và điều chưa thể kết luận.',
           'Không bịa nội dung, trang, cơ quan, quy định hoặc kết quả xác minh bên ngoài tài liệu.',
           'Dùng tiếng Việt rõ ràng, ngắn gọn, hướng đến hành động tiếp theo.',
@@ -259,7 +279,9 @@ function isValidResult(value: any) {
     typeof value.summary === 'string' && Array.isArray(value.documentClassifications) &&
     value.documentClassifications.every((item: any) => item && typeof item.fileName === 'string' && documentTypes.includes(item.documentType) && objectNatures.includes(item.objectNature) && Number.isInteger(item.confidence) && item.confidence >= 0 && item.confidence <= 100 && typeof item.evidence === 'string' && typeof item.handlingPrinciple === 'string') &&
     Array.isArray(value.crossChecks) && value.crossChecks.every((item: any) => item && crossCheckFields.includes(item.field) && crossStatuses.includes(item.status) && Array.isArray(item.values) && item.values.every((entry: any) => entry && typeof entry.value === 'string' && typeof entry.source === 'string') && typeof item.evidence === 'string' && typeof item.recommendation === 'string') &&
-    Array.isArray(value.findings) && Array.isArray(value.limitations) && Array.isArray(value.nextSteps),
+    Array.isArray(value.findings) && Array.isArray(value.limitations) && Array.isArray(value.nextSteps) &&
+    Array.isArray(value.actionPlan) && value.actionPlan.every((item: any) => item && Number.isInteger(item.order) && item.order >= 1 && actionPriorities.includes(item.priority) && typeof item.action === 'string' && typeof item.reason === 'string' && typeof item.completionEvidence === 'string') &&
+    typeof value.completionCondition === 'string',
   );
 }
 
@@ -302,5 +324,22 @@ function mockResult(files: File[], context: string) {
     ],
     limitations: ['Đây là thông báo vận hành, chưa phải kết quả kiểm tra nội dung.'],
     nextSteps: ['Cấu hình khóa OpenAI trên Vercel', 'Triển khai lại ứng dụng', 'Chạy lại tài liệu và kiểm tra bằng chứng trước khi quyết định'],
+    actionPlan: [
+      {
+        order: 1,
+        priority: 'LÀM NGAY',
+        action: 'Cấu hình biến môi trường OPENAI_API_KEY trên Vercel.',
+        reason: 'HTL chưa thể đọc và phân tích nội dung tệp khi thiếu khóa API.',
+        completionEvidence: 'Vercel hiển thị biến OPENAI_API_KEY cho môi trường triển khai đang sử dụng.',
+      },
+      {
+        order: 2,
+        priority: 'LÀM TIẾP',
+        action: 'Triển khai lại ứng dụng và chạy lại phiên xử lý.',
+        reason: 'Bản triển khai cần nạp biến môi trường mới.',
+        completionEvidence: 'Phiên mới trả kết quả phân tích nội dung thay vì thông báo vận hành.',
+      },
+    ],
+    completionCondition: 'HTL đọc được nội dung tệp, xác định được đúng quy trình và trả kết quả có bằng chứng để người dùng kiểm tra.',
   };
 }
