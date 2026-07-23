@@ -21,6 +21,7 @@ type Finding = {
 };
 
 type CrossCheckStatus = 'THỐNG NHẤT' | 'KHÔNG THỐNG NHẤT' | 'CHƯA ĐỦ DỮ LIỆU';
+type ActionPriority = 'LÀM NGAY' | 'LÀM TIẾP' | 'THEO DÕI';
 
 type CrossCheck = {
   field: string;
@@ -28,6 +29,14 @@ type CrossCheck = {
   values: Array<{ value: string; source: string }>;
   evidence: string;
   recommendation: string;
+};
+
+type ActionPlanItem = {
+  order: number;
+  priority: ActionPriority;
+  action: string;
+  reason: string;
+  completionEvidence: string;
 };
 
 type Result = {
@@ -40,6 +49,8 @@ type Result = {
   findings: Finding[];
   limitations: string[];
   nextSteps: string[];
+  actionPlan: ActionPlanItem[];
+  completionCondition: string;
 };
 
 type DossierContext = {
@@ -54,7 +65,8 @@ const processSteps = [
   'Nhận diện đây là tài liệu cần sửa hay hồ sơ cần làm rõ',
   'Chọn đúng quy trình xử lý',
   'Làm rõ nội dung cần sửa hoặc điểm hồ sơ đang vướng',
-  'Lưu và chuẩn bị kết quả để người dùng tiếp tục công việc',
+  'Lập kế hoạch hành động theo thứ tự ưu tiên',
+  'Chuẩn bị điều kiện xác nhận hoàn thành',
 ];
 
 const severityText: Record<Finding['severity'], string> = {
@@ -68,6 +80,12 @@ const crossCheckBadge: Record<CrossCheckStatus, string> = {
   'THỐNG NHẤT': 'thông-tin',
   'KHÔNG THỐNG NHẤT': 'cao',
   'CHƯA ĐỦ DỮ LIỆU': 'trung-bình',
+};
+
+const priorityPresentation: Record<ActionPriority, { label: string; badge: string }> = {
+  'LÀM NGAY': { label: 'Ưu tiên 1 · Làm ngay', badge: 'cao' },
+  'LÀM TIẾP': { label: 'Ưu tiên 2 · Làm tiếp', badge: 'trung-bình' },
+  'THEO DÕI': { label: 'Ưu tiên 3 · Theo dõi', badge: 'thông-tin' },
 };
 
 const workflowPresentation: Record<WorkflowMode, {
@@ -121,6 +139,7 @@ export default function VerificationPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [dossier, setDossier] = useState<DossierContext | null>(null);
   const [checklistSync, setChecklistSync] = useState<ChecklistSyncResult | null>(null);
+  const [completedActions, setCompletedActions] = useState<number[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -145,6 +164,12 @@ export default function VerificationPage() {
     };
   }, [result]);
 
+  const actionProgress = useMemo(() => {
+    const total = result?.actionPlan?.length || 0;
+    const completed = completedActions.length;
+    return { total, completed, percent: total ? Math.round((completed / total) * 100) : 0 };
+  }, [result, completedActions]);
+
   const presentation = result ? workflowPresentation[result.workflowMode] : null;
 
   async function submit(event: FormEvent) {
@@ -157,6 +182,7 @@ export default function VerificationPage() {
     setError('');
     setResult(null);
     setChecklistSync(null);
+    setCompletedActions([]);
     setLoading(true);
     setStep(0);
     if (dossier) updateDossierStatus(dossier.id, 'Đang kiểm tra');
@@ -216,9 +242,16 @@ export default function VerificationPage() {
     }
   }
 
+  function toggleAction(order: number) {
+    setCompletedActions((current) =>
+      current.includes(order) ? current.filter((item) => item !== order) : [...current, order],
+    );
+  }
+
   function resetVerification() {
     setResult(null);
     setChecklistSync(null);
+    setCompletedActions([]);
     setFiles([]);
     setContext('');
   }
@@ -329,6 +362,53 @@ export default function VerificationPage() {
                   </article>
                 ))}
               </div>
+            </>
+          )}
+
+          {result.actionPlan?.length > 0 && (
+            <>
+              <div className="resultHead">
+                <div>
+                  <div className="eyebrow">KẾ HOẠCH XỬ LÝ</div>
+                  <h2>Làm theo thứ tự để tiếp tục công việc</h2>
+                  <p>{actionProgress.completed}/{actionProgress.total} bước đã xác nhận hoàn thành</p>
+                </div>
+                <div className="score"><strong>{actionProgress.percent}%</strong><span>Tiến độ thực hiện</span></div>
+              </div>
+              <div className="progressTrack"><span style={{ width: `${actionProgress.percent}%` }} /></div>
+              <div className="findings">
+                {[...result.actionPlan].sort((a, b) => a.order - b.order).map((item) => {
+                  const completed = completedActions.includes(item.order);
+                  const priority = priorityPresentation[item.priority];
+                  return (
+                    <article className="finding" key={`${item.order}-${item.action}`}>
+                      <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: 'pointer' }}>
+                        <input
+                          className="noPrint"
+                          type="checkbox"
+                          checked={completed}
+                          onChange={() => toggleAction(item.order)}
+                          aria-label={`Đánh dấu hoàn thành bước ${item.order}`}
+                        />
+                        <span>
+                          <span className={`badge ${priority.badge}`}>{priority.label}</span>
+                          <h3 style={{ textDecoration: completed ? 'line-through' : 'none' }}>Bước {item.order}: {item.action}</h3>
+                        </span>
+                      </label>
+                      <p><strong>Lý do:</strong> {item.reason}</p>
+                      <p><strong>Xác nhận hoàn thành bằng:</strong> {item.completionEvidence}</p>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="notice">
+                <strong>Điều kiện hoàn thành:</strong> {result.completionCondition}
+              </div>
+              {actionProgress.total > 0 && actionProgress.completed === actionProgress.total && (
+                <div className="notice">
+                  <strong>Đã hoàn thành toàn bộ kế hoạch.</strong> Anh/chị cần đối chiếu lại bằng chứng hoàn thành trước khi sử dụng tài liệu hoặc tiếp tục xử lý hồ sơ.
+                </div>
+              )}
             </>
           )}
 
