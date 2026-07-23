@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import RecoveryRedirect from './recovery-redirect';
+import { login } from './dang-nhap/actions';
 
 const principles = [
   ['01', 'Chỉ dựa trên hồ sơ được cung cấp', 'Mỗi nhận định phải quay lại được tài liệu, vị trí và bằng chứng cụ thể.'],
@@ -19,17 +20,36 @@ export default function HomePage() {
         <span className="pilot">BẢN PILOT</span>
       </header>
 
-      <section className="hero">
-        <div className="eyebrow">TRỢ LÝ AI CHUYÊN SÂU VỀ HỒ SƠ</div>
-        <h1>Đọc kỹ hồ sơ. Chỉ rõ bằng chứng. Nói thật giới hạn.</h1>
-        <p>
-          HTL giúp anh/chị quản lý hồ sơ, đối chiếu thông tin, phát hiện điểm chưa thống nhất và xác định việc cần làm tiếp theo mà không đưa ra kết luận vượt quá bằng chứng.
-        </p>
-        <div className="heroActions">
-          <Link className="primary" href="/ho-so">Quản lý hồ sơ</Link>
-          <Link className="primary secondary" href="/kiem-tra">Kiểm tra tài liệu</Link>
-          <Link className="primary secondary" href="/dang-nhap">Đăng nhập</Link>
+      <section className="hero heroLayout">
+        <div className="heroContent">
+          <div className="eyebrow">TRỢ LÝ AI CHUYÊN SÂU VỀ HỒ SƠ</div>
+          <h1>Đọc kỹ hồ sơ. Chỉ rõ bằng chứng. Nói thật giới hạn.</h1>
+          <p>
+            HTL giúp anh/chị quản lý hồ sơ, đối chiếu thông tin, phát hiện điểm chưa thống nhất và xác định việc cần làm tiếp theo mà không đưa ra kết luận vượt quá bằng chứng.
+          </p>
+          <div className="heroActions">
+            <Link className="primary" href="/ho-so">Quản lý hồ sơ</Link>
+            <Link className="primary secondary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+            <a className="primary secondary" href="#dang-nhap">Đăng nhập</a>
+          </div>
         </div>
+
+        <aside className="loginCard" id="dang-nhap">
+          <div className="eyebrow">KHU VỰC THÀNH VIÊN</div>
+          <h2>Đăng nhập HTL</h2>
+          <p>Truy cập hồ sơ và tiếp tục công việc đang thực hiện.</p>
+          <form action={login} className="loginForm">
+            <label className="field">
+              <span>Email</span>
+              <input name="email" type="email" placeholder="ten@doanhnghiep.vn" autoComplete="email" required />
+            </label>
+            <label className="field">
+              <span>Mật khẩu</span>
+              <input name="password" type="password" placeholder="Nhập mật khẩu" autoComplete="current-password" required />
+            </label>
+            <button className="primary button" type="submit">Đăng nhập</button>
+          </form>
+        </aside>
       </section>
 
       <section className="grid">
