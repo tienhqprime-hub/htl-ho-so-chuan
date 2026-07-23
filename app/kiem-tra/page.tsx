@@ -6,6 +6,7 @@ import {
   AI_CLASSIFICATION_THRESHOLD,
   ChecklistSyncResult,
   DocumentClassification,
+  WorkflowMode,
   saveVerificationHistory,
   syncUploadedFilesToChecklist,
   updateDossierStatus,
@@ -30,6 +31,7 @@ type CrossCheck = {
 };
 
 type Result = {
+  workflowMode: WorkflowMode;
   status: 'CÓ CƠ SỞ TIN CẬY' | 'CẦN XÁC MINH THÊM' | 'CÓ DẤU HIỆU BẤT THƯỜNG';
   confidence: number;
   summary: string;
@@ -48,11 +50,11 @@ type DossierContext = {
 };
 
 const processSteps = [
-  'Đọc tài liệu người dùng vừa cung cấp',
-  'Nhận diện hồ sơ chính thức hay tài liệu có thể cập nhật',
-  'Đối chiếu đúng vấn đề người dùng đang mắc',
-  'Tìm điểm sai, thiếu hoặc chưa thống nhất',
-  'Chuẩn bị kết luận và việc cần làm ngay',
+  'Đọc tệp người dùng vừa cung cấp',
+  'Nhận diện đây là tài liệu cần sửa hay hồ sơ cần làm rõ',
+  'Chọn đúng quy trình xử lý',
+  'Làm rõ nội dung cần sửa hoặc điểm hồ sơ đang vướng',
+  'Lưu và chuẩn bị kết quả để người dùng tiếp tục công việc',
 ];
 
 const severityText: Record<Finding['severity'], string> = {
@@ -66,6 +68,48 @@ const crossCheckBadge: Record<CrossCheckStatus, string> = {
   'THỐNG NHẤT': 'thông-tin',
   'KHÔNG THỐNG NHẤT': 'cao',
   'CHƯA ĐỦ DỮ LIỆU': 'trung-bình',
+};
+
+const workflowPresentation: Record<WorkflowMode, {
+  eyebrow: string;
+  title: string;
+  findingsTitle: string;
+  evidenceLabel: string;
+  actionLabel: string;
+  nextStepsTitle: string;
+}> = {
+  'SỬA TÀI LIỆU': {
+    eyebrow: 'KẾT QUẢ SỬA TÀI LIỆU',
+    title: 'Tài liệu cần sửa để đúng',
+    findingsTitle: 'Những nội dung cần sửa',
+    evidenceLabel: 'Nội dung hiện tại hoặc căn cứ',
+    actionLabel: 'Đề nghị sửa',
+    nextStepsTitle: 'Các bước hoàn thiện tài liệu',
+  },
+  'LÀM RÕ HỒ SƠ': {
+    eyebrow: 'KẾT QUẢ LÀM RÕ HỒ SƠ',
+    title: 'Hồ sơ đang vướng ở đâu',
+    findingsTitle: 'Các điểm hồ sơ đang vướng',
+    evidenceLabel: 'Bằng chứng',
+    actionLabel: 'Cách xử lý',
+    nextStepsTitle: 'Các bước xử lý hồ sơ',
+  },
+  'HỖN HỢP': {
+    eyebrow: 'KẾT QUẢ XỬ LÝ HỖN HỢP',
+    title: 'Tài liệu cần sửa và hồ sơ cần làm rõ',
+    findingsTitle: 'Các nội dung cần xử lý theo từng bản chất',
+    evidenceLabel: 'Bằng chứng hoặc nội dung hiện tại',
+    actionLabel: 'Cách xử lý phù hợp',
+    nextStepsTitle: 'Các bước thực hiện tiếp theo',
+  },
+  'CHƯA XÁC ĐỊNH': {
+    eyebrow: 'KẾT QUẢ NHẬN DIỆN',
+    title: 'Chưa đủ căn cứ chọn quy trình',
+    findingsTitle: 'Các điểm cần xác minh trước',
+    evidenceLabel: 'Căn cứ quan sát được',
+    actionLabel: 'Việc cần làm',
+    nextStepsTitle: 'Các bước xác minh tiếp theo',
+  },
 };
 
 export default function VerificationPage() {
@@ -101,10 +145,12 @@ export default function VerificationPage() {
     };
   }, [result]);
 
+  const presentation = result ? workflowPresentation[result.workflowMode] : null;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!files.length) {
-      setError('Anh/chị vui lòng chọn ít nhất một tài liệu đang cần kiểm tra.');
+      setError('Anh/chị vui lòng chọn ít nhất một tài liệu hoặc hồ sơ đang cần xử lý.');
       return;
     }
 
@@ -142,6 +188,7 @@ export default function VerificationPage() {
           createdAt: new Date().toLocaleString('vi-VN'),
           fileNames,
           context,
+          workflowMode: completedResult.workflowMode,
           status: completedResult.status,
           confidence: completedResult.confidence,
           summary: completedResult.summary,
@@ -187,14 +234,14 @@ export default function VerificationPage() {
       </header>
 
       <section className="panel noPrint">
-        <div className="eyebrow">KIỂM TRA NHANH</div>
-        <h1>Đưa tài liệu đang làm anh/chị mắc việc vào đây.</h1>
+        <div className="eyebrow">TIẾP NHẬN VÀ LÀM RÕ</div>
+        <h1>Đưa tài liệu hoặc hồ sơ đang làm anh/chị mắc việc vào đây.</h1>
         <p className="leadResult muted">
-          HTL tập trung đúng vấn đề trước mắt: đọc tài liệu, chỉ ra điểm sai hoặc chưa rõ, nêu bằng chứng và hướng xử lý để anh/chị tiếp tục công việc.
+          HTL sẽ nhận diện đúng bản chất: tài liệu thì giúp chỉ rõ cần sửa gì để đúng; hồ sơ thì giúp làm rõ đang vướng ở đâu và cần xử lý thế nào.
         </p>
 
         <div className="notice">
-          <strong>Nguyên tắc xử lý:</strong> Hồ sơ chính thức đã ký, đóng dấu hoặc ban hành không được tự ý sửa trực tiếp. Tài liệu làm việc, quy trình hoặc hướng dẫn có thể được cập nhật bằng phiên bản phù hợp.
+          <strong>Nguyên tắc xử lý:</strong> Hồ sơ chính thức đã ký, đóng dấu hoặc ban hành không được tự ý sửa trực tiếp. Tài liệu có thể cập nhật sẽ được chỉ rõ nội dung cần sửa và cách viết phù hợp.
         </div>
 
         {dossier && (
@@ -212,7 +259,7 @@ export default function VerificationPage() {
               accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"
               onChange={(event) => setFiles(Array.from(event.target.files || []).slice(0, 8))}
             />
-            <span>Chọn hoặc kéo tài liệu đang cần làm rõ vào đây</span>
+            <span>Chọn hoặc kéo tài liệu, hồ sơ đang cần làm rõ vào đây</span>
             <small>PDF, ảnh hoặc TXT · tối đa 8 tệp · mỗi tệp 12 MB</small>
           </label>
 
@@ -229,17 +276,17 @@ export default function VerificationPage() {
           )}
 
           <label className="field">
-            Anh/chị đang mắc ở điểm nào?
+            Anh/chị đang cần sửa tài liệu hay đang vướng ở điểm nào trong hồ sơ?
             <textarea
               value={context}
               onChange={(event) => setContext(event.target.value)}
-              placeholder="Ví dụ: Hóa đơn bị mờ và số tiền có vẻ không khớp với đơn hàng, hãy kiểm tra giúp tôi."
+              placeholder="Ví dụ: Hãy chỉ rõ hợp đồng dự thảo này cần sửa gì để đúng; hoặc hồ sơ này đang thiếu và không thống nhất ở điểm nào."
             />
           </label>
 
           {error && <p className="error">{error}</p>}
           <button className="primary button" disabled={loading} type="submit">
-            {loading ? 'HTL đang kiểm tra…' : 'Kiểm tra ngay'}
+            {loading ? 'HTL đang xử lý…' : 'Làm rõ ngay'}
           </button>
         </form>
       </section>
@@ -255,25 +302,30 @@ export default function VerificationPage() {
         </section>
       )}
 
-      {result && (
+      {result && presentation && (
         <section className="panel result">
           <div className="resultHead">
-            <div><div className="eyebrow">KẾT LUẬN</div><h2>{result.status}</h2></div>
+            <div>
+              <div className="eyebrow">{presentation.eyebrow}</div>
+              <h2>{presentation.title}</h2>
+              <p><strong>Quy trình:</strong> {result.workflowMode}</p>
+              <p><strong>Trạng thái:</strong> {result.status}</p>
+            </div>
             <div className="score"><strong>{result.confidence}%</strong><span>Mức độ tin cậy</span></div>
           </div>
           <p className="leadResult">{result.summary}</p>
 
           {result.findings?.length > 0 && (
             <>
-              <h3>Điểm cần xử lý</h3>
+              <h3>{presentation.findingsTitle}</h3>
               <div className="findings">
                 {result.findings.map((finding, index) => (
                   <article className="finding" key={`${finding.title}-${index}`}>
                     <span className={`badge ${finding.severity.toLowerCase().replace(' ', '-')}`}>{severityText[finding.severity]}</span>
                     <h3>{finding.title}</h3>
-                    <p><strong>Bằng chứng:</strong> {finding.evidence}</p>
+                    <p><strong>{presentation.evidenceLabel}:</strong> {finding.evidence}</p>
                     <p><strong>Nguồn:</strong> {finding.source}</p>
-                    <p><strong>Việc cần làm:</strong> {finding.recommendation}</p>
+                    <p><strong>{presentation.actionLabel}:</strong> {finding.recommendation}</p>
                   </article>
                 ))}
               </div>
@@ -311,7 +363,7 @@ export default function VerificationPage() {
 
           {result.documentClassifications?.length > 0 && (
             <>
-              <h3>HTL xác định bản chất và loại tài liệu</h3>
+              <h3>HTL xác định bản chất và loại tệp</h3>
               <div className="findings">
                 {result.documentClassifications.map((classification, index) => {
                   const needsReview =
@@ -338,12 +390,12 @@ export default function VerificationPage() {
 
           <div className="twoCols">
             <div><h3>Điều chưa thể kết luận</h3><ul>{result.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>
-            <div><h3>Việc làm tiếp theo</h3><ol>{result.nextSteps.map((item) => <li key={item}>{item}</li>)}</ol></div>
+            <div><h3>{presentation.nextStepsTitle}</h3><ol>{result.nextSteps.map((item) => <li key={item}>{item}</li>)}</ol></div>
           </div>
 
           {dossier && checklistSync && (
             <div className="notice">
-              Kết quả đã được lưu vào hồ sơ {dossier.code}. Việc lưu chỉ nhằm theo dõi lịch sử, không làm thay đổi bản gốc của tài liệu đã ban hành.
+              Kết quả và loại quy trình đã được lưu vào hồ sơ {dossier.code}. Việc lưu chỉ nhằm theo dõi lịch sử, không làm thay đổi bản gốc của hồ sơ đã ban hành.
             </div>
           )}
 
@@ -351,7 +403,7 @@ export default function VerificationPage() {
 
           <div className="actions noPrint">
             <button className="primary" onClick={() => window.print()}>In hoặc lưu PDF</button>
-            <button className="primary secondary" onClick={resetVerification}>Kiểm tra tài liệu khác</button>
+            <button className="primary secondary" onClick={resetVerification}>Xử lý tệp khác</button>
             {dossier && <Link className="primary secondary" href={`/ho-so/${encodeURIComponent(dossier.id)}`}>Mở lịch sử hồ sơ</Link>}
           </div>
         </section>
