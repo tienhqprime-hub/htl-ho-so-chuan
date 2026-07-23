@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import RecoveryRedirect from './recovery-redirect';
 
 const principles = [
   ['01', 'Chỉ dựa trên hồ sơ được cung cấp', 'Mỗi nhận định phải quay lại được tài liệu, vị trí và bằng chứng cụ thể.'],
@@ -9,6 +10,7 @@ const principles = [
 export default function HomePage() {
   return (
     <main className="shell">
+      <RecoveryRedirect />
       <header className="topbar">
         <div>
           <div className="brand">HTL HỒ SƠ CHUẨN</div>
