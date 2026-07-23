@@ -1,140 +1,116 @@
-'use client';
-
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import {
-  Dossier,
-  DossierStatus,
-  VerificationHistoryItem,
-  readDossiers,
-  readVerificationHistory,
-  writeDossiers,
-} from '../../lib/dossier-storage';
+import { createDossierAction } from '../actions/dossiers';
+import { requireUser } from '../../lib/auth/authorization';
+import { listDossiers, type DossierStatus } from '../../lib/data/dossiers';
 
-const statuses: DossierStatus[] = ['Mới tiếp nhận','Đang kiểm tra','Chờ bổ sung','Hoàn thành','Đã đóng'];
+const statusLabels: Record<DossierStatus, string> = {
+  draft: 'Bản nháp',
+  in_review: 'Đang xem xét',
+  approved: 'Đã phê duyệt',
+  rejected: 'Bị từ chối',
+  archived: 'Đã lưu trữ',
+};
 
-export default function DossiersPage() {
-  const [items,setItems] = useState<Dossier[]>([]);
-  const [history,setHistory] = useState<VerificationHistoryItem[]>([]);
-  const [query,setQuery] = useState('');
-  const [status,setStatus] = useState<'Tất cả'|DossierStatus>('Tất cả');
-  const [ready,setReady] = useState(false);
-  const [expandedId,setExpandedId] = useState<string | null>(null);
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value));
+}
 
-  useEffect(() => {
-    setItems(readDossiers());
-    setHistory(readVerificationHistory());
-    setReady(true);
-  }, []);
+export default async function DossiersPage({
+  searchParams,
+}: {
+  searchParams?: { q?: string; status?: string };
+}) {
+  const user = await requireUser();
 
-  useEffect(() => {
-    if (ready) writeDossiers(items);
-  }, [items,ready]);
-
-  const filtered = useMemo(() => items.filter((item) => {
-    const text = `${item.code} ${item.name} ${item.company} ${item.category} ${item.owner}`.toLowerCase();
-    return text.includes(query.toLowerCase()) && (status === 'Tất cả' || item.status === status);
-  }), [items,query,status]);
-
-  const historyByDossier = useMemo(() => {
-    return history.reduce<Record<string, VerificationHistoryItem[]>>((groups, entry) => {
-      (groups[entry.dossierId] ||= []).push(entry);
-      return groups;
-    }, {});
-  }, [history]);
-
-  function createDossier(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const now = new Date();
-    const item: Dossier = {
-      id: crypto.randomUUID(),
-      code: `HTL-${now.getFullYear()}-${String(items.length + 1).padStart(6,'0')}`,
-      name: String(data.get('name') || '').trim(),
-      company: String(data.get('company') || '').trim(),
-      category: String(data.get('category') || '').trim(),
-      owner: String(data.get('owner') || '').trim(),
-      status: 'Mới tiếp nhận',
-      createdAt: now.toLocaleDateString('vi-VN'),
-    };
-    if (!item.name || !item.company) return;
-    setItems((current) => [item,...current]);
-    event.currentTarget.reset();
+  if (!user.enterpriseId) {
+    return (
+      <main className="shell">
+        <section className="panel emptyState">
+          <div className="eyebrow">MODULE QUẢN LÝ HỒ SƠ</div>
+          <h1>Chưa xác định doanh nghiệp</h1>
+          <p>Quản trị viên cần gắn tài khoản này với một doanh nghiệp trước khi tạo và quản lý hồ sơ.</p>
+        </section>
+      </main>
+    );
   }
 
-  function verificationUrl(item: Dossier) {
-    const params = new URLSearchParams({ dossierId: item.id, code: item.code, name: item.name, company: item.company });
-    return `/kiem-tra?${params.toString()}`;
+  const dossiers = await listDossiers(user.enterpriseId);
+  const query = String(searchParams?.q ?? '').trim().toLowerCase();
+  const selectedStatus = String(searchParams?.status ?? 'all');
+  const filtered = dossiers.filter((item) => {
+    const matchesText = !query || `${item.code} ${item.title} ${item.category ?? ''} ${item.description ?? ''}`.toLowerCase().includes(query);
+    const matchesStatus = selectedStatus === 'all' || item.status === selectedStatus;
+    return matchesText && matchesStatus;
+  });
+
+  async function createAction(formData: FormData): Promise<void> {
+    'use server';
+    await createDossierAction(formData);
   }
 
   return (
     <main className="shell">
       <header className="topbar">
-        <div><div className="brand">HTL HỒ SƠ CHUẨN</div><div className="tagline">Quản lý hồ sơ doanh nghiệp</div></div>
-        <div className="actions"><Link className="secondary primary" href="/">Trang chủ</Link><Link className="primary" href="/kiem-tra">Kiểm tra tài liệu</Link></div>
+        <div>
+          <Link className="brand" href="/">HTL HỒ SƠ CHUẨN</Link>
+          <div className="tagline">Quản lý hồ sơ doanh nghiệp trên Supabase</div>
+        </div>
+        <div className="actions">
+          <Link className="secondary primary" href="/dashboard">Dashboard</Link>
+          <Link className="primary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+        </div>
       </header>
 
       <section className="panel">
         <div className="eyebrow">MODULE QUẢN LÝ HỒ SƠ</div>
         <h1>Danh sách hồ sơ</h1>
-        <p className="muted">Tạo, tìm kiếm, theo dõi trạng thái và xem lại lịch sử kiểm tra của từng hồ sơ. Dữ liệu bản thử nghiệm được lưu trên trình duyệt này.</p>
-        <form className="dossierForm" onSubmit={createDossier}>
-          <input name="name" placeholder="Tên hồ sơ *" required />
-          <input name="company" placeholder="Doanh nghiệp/khách hàng *" required />
+        <p className="muted">Tạo và theo dõi hồ sơ thật của doanh nghiệp. Dữ liệu được bảo vệ theo tài khoản và Row Level Security.</p>
+
+        <form className="dossierForm" action={createAction}>
+          <input name="enterpriseId" type="hidden" value={user.enterpriseId} />
+          <input name="code" placeholder="Mã hồ sơ *" required />
+          <input name="title" placeholder="Tên hồ sơ *" required />
           <input name="category" placeholder="Loại hồ sơ" />
-          <input name="owner" placeholder="Người phụ trách" />
+          <input name="description" placeholder="Mô tả ngắn" />
+          <input name="status" type="hidden" value="draft" />
           <button className="primary" type="submit">Tạo hồ sơ</button>
         </form>
       </section>
 
       <section className="panel">
-        <div className="dossierToolbar">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm mã, tên, doanh nghiệp..." />
-          <select value={status} onChange={(e) => setStatus(e.target.value as 'Tất cả'|DossierStatus)}>
-            <option>Tất cả</option>{statuses.map((value) => <option key={value}>{value}</option>)}
+        <form className="dossierToolbar" method="get">
+          <input defaultValue={searchParams?.q ?? ''} name="q" placeholder="Tìm mã, tên, loại hồ sơ..." />
+          <select defaultValue={selectedStatus} name="status">
+            <option value="all">Tất cả trạng thái</option>
+            {Object.entries(statusLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </select>
-        </div>
+          <button className="primary secondary" type="submit">Lọc hồ sơ</button>
+        </form>
+
         <div className="dossierList">
           {!filtered.length && <div className="emptyState">Chưa có hồ sơ phù hợp.</div>}
-          {filtered.map((item) => {
-            const entries = historyByDossier[item.id] || [];
-            const expanded = expandedId === item.id;
-            return (
-              <article className="dossierItem" key={item.id}>
-                <div>
-                  <strong>{item.code}</strong>
-                  <h3>{item.name}</h3>
-                  <p>{item.company} · {item.category || 'Chưa phân loại'} · {item.owner || 'Chưa phân công'}</p>
-                  <small>{entries.length} lần kiểm tra đã lưu</small>
-
-                  {expanded && (
-                    <div className="historyList">
-                      {!entries.length && <div className="emptyState">Hồ sơ này chưa có lịch sử kiểm tra.</div>}
-                      {entries.map((entry) => (
-                        <section className="finding" key={entry.id}>
-                          <div className="resultHead">
-                            <div><small>{entry.createdAt}</small><h3>{entry.status}</h3></div>
-                            <div className="score"><strong>{entry.confidence}%</strong><span>Mức độ tự tin</span></div>
-                          </div>
-                          <p>{entry.summary}</p>
-                          <p><strong>Tài liệu:</strong> {entry.fileNames.join(', ') || 'Không có tên tệp'}</p>
-                          <p><strong>Nội dung cần làm rõ:</strong> {entry.context || 'Không ghi thêm yêu cầu'}</p>
-                        </section>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="dossierMeta">
-                  <span className="badge">{item.status}</span>
-                  <small>{item.createdAt}</small>
-                  <button className="primary secondary dossierAction" type="button" onClick={() => setExpandedId(expanded ? null : item.id)}>
-                    {expanded ? 'Ẩn lịch sử' : 'Xem lịch sử'}
-                  </button>
-                  <Link className="primary dossierAction" href={verificationUrl(item)}>Kiểm tra tài liệu</Link>
-                </div>
-              </article>
-            );
-          })}
+          {filtered.map((item) => (
+            <article className="dossierItem" key={item.id}>
+              <div>
+                <strong>{item.code}</strong>
+                <h3>{item.title}</h3>
+                <p>{item.category || 'Chưa phân loại'} · {item.description || 'Chưa có mô tả'}</p>
+                <small>Cập nhật: {formatDate(item.updated_at)}</small>
+              </div>
+              <div className="dossierMeta">
+                <span className="badge">{statusLabels[item.status]}</span>
+                <small>Tạo ngày {formatDate(item.created_at)}</small>
+                <Link className="primary secondary dossierAction" href={`/ho-so/${item.id}`}>Mở hồ sơ</Link>
+                <Link className="primary dossierAction" href={`/kiem-tra?dossierId=${item.id}&code=${encodeURIComponent(item.code)}&name=${encodeURIComponent(item.title)}`}>Kiểm tra tài liệu</Link>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
     </main>
