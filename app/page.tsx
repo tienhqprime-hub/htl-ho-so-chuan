@@ -30,18 +30,18 @@ export default function HomePage() {
           <div className="heroActions">
             <Link className="primary" href="/ho-so">Quản lý hồ sơ</Link>
             <Link className="primary secondary" href="/kiem-tra">Kiểm tra tài liệu</Link>
-            <a className="primary secondary" href="#dang-nhap">Đăng nhập</a>
           </div>
         </div>
 
         <aside className="loginCard" id="dang-nhap">
+          <div className="loginStatus"><span aria-hidden="true" /> KẾT NỐI BẢO MẬT</div>
           <div className="eyebrow">KHU VỰC THÀNH VIÊN</div>
           <h2>Đăng nhập HTL</h2>
           <p>Truy cập hồ sơ và tiếp tục công việc đang thực hiện.</p>
           <form action={login} className="loginForm">
             <label className="field">
               <span>Email</span>
-              <input name="email" type="email" placeholder="ten@doanhnghiep.vn" autoComplete="email" required />
+              <input name="email" type="email" placeholder="ten@doanhnghiep.vn" autoComplete="email" inputMode="email" required />
             </label>
             <label className="field">
               <span>Mật khẩu</span>
@@ -49,6 +49,7 @@ export default function HomePage() {
             </label>
             <button className="primary button" type="submit">Đăng nhập</button>
           </form>
+          <div className="loginTrust">Phiên đăng nhập được bảo vệ và chỉ dùng để truy cập hồ sơ của anh/chị.</div>
         </aside>
       </section>
 
