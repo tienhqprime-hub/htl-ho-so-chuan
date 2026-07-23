@@ -28,6 +28,7 @@ export default function HomePage() {
         <div className="heroActions">
           <Link className="primary" href="/ho-so">Quản lý hồ sơ</Link>
           <Link className="primary secondary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+          <Link className="primary secondary" href="/dang-nhap">Đăng nhập</Link>
         </div>
       </section>
 
