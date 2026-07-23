@@ -311,19 +311,24 @@ export default function VerificationPage() {
 
           {result.documentClassifications?.length > 0 && (
             <>
-              <h3>HTL nhận diện loại tài liệu</h3>
+              <h3>HTL xác định bản chất và loại tài liệu</h3>
               <div className="findings">
                 {result.documentClassifications.map((classification, index) => {
-                  const needsReview = classification.documentType === 'Chưa xác định' || classification.confidence < AI_CLASSIFICATION_THRESHOLD;
+                  const needsReview =
+                    classification.documentType === 'Chưa xác định' ||
+                    classification.objectNature === 'CHƯA XÁC ĐỊNH' ||
+                    classification.confidence < AI_CLASSIFICATION_THRESHOLD;
                   return (
                     <article className="finding" key={`${classification.fileName}-${index}`}>
                       <span className={`badge ${needsReview ? 'trung-bình' : 'thông-tin'}`}>
                         {needsReview ? 'Cần xác nhận' : 'Đã nhận diện'}
                       </span>
                       <h3>{classification.fileName}</h3>
-                      <p><strong>Loại:</strong> {classification.documentType}</p>
+                      <p><strong>Bản chất:</strong> {classification.objectNature}</p>
+                      <p><strong>Loại tài liệu:</strong> {classification.documentType}</p>
                       <p><strong>Mức độ tin cậy:</strong> {classification.confidence}%</p>
                       <p><strong>Căn cứ nhận diện:</strong> {classification.evidence}</p>
+                      <p><strong>Nguyên tắc xử lý:</strong> {classification.handlingPrinciple}</p>
                     </article>
                   );
                 })}
