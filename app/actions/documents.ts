@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { requireEnterpriseAccess } from '../../lib/auth/authorization';
 import {
   createDocument,
@@ -134,6 +135,8 @@ export async function uploadDocumentAction(formData: FormData): Promise<void> {
     await supabase.storage.from(DOCUMENT_BUCKET).remove([storagePath]);
     throw error;
   }
+
+  redirect(`/ho-so/${dossierId}?uploaded=1`);
 }
 
 export async function createDocumentAction(
