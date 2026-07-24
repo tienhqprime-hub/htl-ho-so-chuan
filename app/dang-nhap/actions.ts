@@ -8,14 +8,15 @@ export async function login(formData: FormData) {
   const password = String(formData.get('password') ?? '');
 
   if (!email || !password) {
-    redirect('/dang-nhap?error=missing');
+    redirect('/?authError=missing#dang-nhap');
   }
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect('/dang-nhap?error=invalid');
+    const code = error.message.toLowerCase().includes('confirm') ? 'unconfirmed' : 'invalid';
+    redirect(`/?authError=${code}#dang-nhap`);
   }
 
   redirect('/ho-so');
@@ -24,5 +25,5 @@ export async function login(formData: FormData) {
 export async function logout() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  redirect('/dang-nhap');
+  redirect('/');
 }
