@@ -49,12 +49,30 @@ function formatSize(value: number | null): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function daysUntil(value: string | null): number | null {
+  if (!value) return null;
+  const target = new Date(value);
+  const today = new Date();
+  target.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - today.getTime()) / 86_400_000);
+}
+
 type TimelineEvent = {
   id: string;
   time: string;
   title: string;
   detail: string;
   state: 'done' | 'active' | 'warning' | 'neutral';
+};
+
+type OperationalIssue = {
+  id: string;
+  severity: 'critical' | 'warning' | 'attention';
+  title: string;
+  why: string;
+  impact: string;
+  action: string;
 };
 
 export default async function DossierDetailPage({
@@ -108,24 +126,113 @@ export default async function DossierDetailPage({
     }] : []),
   ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
+  const issues: OperationalIssue[] = [];
+
+  if (!documents.length) {
+    issues.push({
+      id: 'missing-documents',
+      severity: 'critical',
+      title: 'Hồ sơ chưa có tài liệu để kiểm tra',
+      why: 'Không có dữ liệu đầu vào nên hệ thống chưa thể đối chiếu nội dung, thời hạn hoặc tính đầy đủ.',
+      impact: 'Hồ sơ chưa đủ điều kiện để tiếp tục bước kiểm tra nghiệp vụ.',
+      action: 'Tải tài liệu đầu tiên lên hồ sơ và chạy kiểm tra.',
+    });
+  }
+
+  for (const document of documents) {
+    const remaining = daysUntil(document.expires_at);
+    if (document.status === 'expired' || (remaining != null && remaining < 0)) {
+      issues.push({
+        id: `expired-${document.id}`,
+        severity: 'critical',
+        title: `Tài liệu “${document.name}” đã hết hạn`,
+        why: `Ngày hết hạn đã qua ${Math.abs(remaining ?? 0)} ngày.`,
+        impact: 'Có thể làm hồ sơ bị từ chối, gián đoạn xử lý hoặc phát sinh chi phí bổ sung.',
+        action: 'Thay bằng tài liệu còn hiệu lực và kiểm tra lại toàn bộ hồ sơ.',
+      });
+    } else if (remaining != null && remaining <= 30) {
+      issues.push({
+        id: `expiring-${document.id}`,
+        severity: remaining <= 7 ? 'critical' : 'warning',
+        title: `Tài liệu “${document.name}” sắp hết hạn`,
+        why: `Chỉ còn ${remaining} ngày hiệu lực.`,
+        impact: 'Hồ sơ có thể trở nên không hợp lệ nếu xử lý kéo dài qua thời hạn.',
+        action: 'Chuẩn bị gia hạn hoặc thay tài liệu trước khi tiếp tục công việc.',
+      });
+    }
+
+    if (!document.document_type) {
+      issues.push({
+        id: `unclassified-${document.id}`,
+        severity: 'attention',
+        title: `Tài liệu “${document.name}” chưa được phân loại`,
+        why: 'Thiếu loại tài liệu khiến việc áp quy tắc kiểm tra và đối chiếu bị hạn chế.',
+        impact: 'Có nguy cơ bỏ sót yêu cầu bắt buộc hoặc áp sai tiêu chí kiểm tra.',
+        action: 'Xác định đúng loại tài liệu trước khi chạy kiểm tra chuyên sâu.',
+      });
+    }
+  }
+
+  for (const workflow of workflows) {
+    if (workflow.status === 'cancelled') {
+      issues.push({
+        id: `cancelled-${workflow.id}`,
+        severity: 'warning',
+        title: `Quy trình “${workflow.workflow_key}” đã bị dừng`,
+        why: `Quy trình dừng tại bước “${workflow.current_step || 'chưa xác định'}”.`,
+        impact: 'Hồ sơ không thể đi tiếp nếu chưa xác định nguyên nhân và người xử lý.',
+        action: 'Mở Trung tâm công việc, xác định lý do dừng và khởi động lại luồng phù hợp.',
+      });
+    }
+  }
+
+  if (dossier.status === 'rejected') {
+    issues.unshift({
+      id: 'dossier-rejected',
+      severity: 'critical',
+      title: 'Hồ sơ đang ở trạng thái bị từ chối',
+      why: 'Kết quả hiện tại cho thấy hồ sơ chưa đáp ứng yêu cầu phê duyệt.',
+      impact: 'Không nên tiếp tục các bước nghiệp vụ phụ thuộc vào hồ sơ này.',
+      action: 'Xem các điểm cần sửa, cập nhật tài liệu và gửi kiểm tra lại.',
+    });
+  }
+
   const activeWorkflow = workflows.find((workflow) => workflow.status === 'active' || workflow.status === 'pending');
-  const nextAction = activeWorkflow
-    ? `Tiếp tục công việc “${activeWorkflow.workflow_key}” tại bước “${activeWorkflow.current_step || 'xác định bước tiếp theo'}”.`
-    : dossier.status === 'approved'
-      ? 'Hồ sơ đã được phê duyệt. Có thể tiếp tục công việc nghiệp vụ liên quan.'
-      : documents.length
-        ? 'Kiểm tra tài liệu để xác định lỗi, căn cứ và bước xử lý tiếp theo.'
-        : 'Tải tài liệu đầu tiên lên hồ sơ để bắt đầu kiểm tra.';
+  const nextAction = issues.length
+    ? issues[0].action
+    : activeWorkflow
+      ? `Tiếp tục công việc “${activeWorkflow.workflow_key}” tại bước “${activeWorkflow.current_step || 'xác định bước tiếp theo'}”.`
+      : dossier.status === 'approved'
+        ? 'Hồ sơ đã được phê duyệt. Có thể tiếp tục công việc nghiệp vụ liên quan.'
+        : documents.length
+          ? 'Chạy kiểm tra tài liệu để xác nhận hồ sơ đã sẵn sàng.'
+          : 'Tải tài liệu đầu tiên lên hồ sơ để bắt đầu kiểm tra.';
+
+  const verifiedDocuments = documents.filter((document) => document.status === 'verified').length;
+  const completedWorkflows = workflows.filter((workflow) => workflow.status === 'completed').length;
+  const criticalIssues = issues.filter((issue) => issue.severity === 'critical').length;
+  const warningIssues = issues.filter((issue) => issue.severity === 'warning').length;
+  const baseScore = documents.length ? 55 : 20;
+  const healthScore = Math.max(0, Math.min(100,
+    baseScore
+      + verifiedDocuments * 8
+      + completedWorkflows * 5
+      + (dossier.status === 'approved' ? 25 : 0)
+      - criticalIssues * 20
+      - warningIssues * 8,
+  ));
+  const canContinue = criticalIssues === 0 && dossier.status !== 'rejected';
 
   return (
     <main className="shell">
       <header className="topbar">
         <div>
           <Link className="brand" href="/dashboard">HTL HỒ SƠ CHUẨN</Link>
-          <div className="tagline">Một cửa: hồ sơ · tài liệu · công việc · kết quả</div>
+          <div className="tagline">Buồng điều khiển: biết sai ở đâu · vì sao · làm gì tiếp</div>
         </div>
         <div className="actions">
-          <Link className="primary secondary" href="/cong-viec">Trung tâm công việc</Link>
+          <Link className="primary secondary" href="/thong-bao">Thông báo</Link>
+          <Link className="primary secondary" href="/cong-viec">Công việc</Link>
           <Link className="primary secondary" href="/ho-so">Danh sách hồ sơ</Link>
           <Link
             className="primary"
@@ -144,23 +251,52 @@ export default async function DossierDetailPage({
             <p className="muted">{dossier.description || 'Chưa có mô tả chi tiết.'}</p>
           </div>
           <div className="score">
-            <strong>{documents.length}</strong>
-            <span>Tài liệu</span>
+            <strong>{healthScore}</strong>
+            <span>Sức khỏe hồ sơ</span>
           </div>
         </div>
 
         <div className="dossierToolbar">
           <div><strong>Trạng thái:</strong> {dossierStatusLabels[dossier.status]}</div>
           <div><strong>Phân loại:</strong> {dossier.category || 'Chưa phân loại'}</div>
-          <div><strong>Ngày tạo:</strong> {formatDate(dossier.created_at)}</div>
+          <div><strong>Tài liệu:</strong> {documents.length}</div>
+          <div><strong>Vấn đề:</strong> {issues.length}</div>
+          <div><strong>Có thể đi tiếp:</strong> {canContinue ? 'Có' : 'Chưa'}</div>
           <div><strong>Cập nhật:</strong> {formatDate(dossier.updated_at)}</div>
         </div>
       </section>
 
       <section className="panel">
-        <div className="eyebrow">BƯỚC TIẾP THEO</div>
-        <h2>Người dùng cần làm gì ngay bây giờ?</h2>
-        <div className="emptyState"><strong>{nextAction}</strong></div>
+        <div className="eyebrow">KẾT LUẬN ĐIỀU HÀNH</div>
+        <h2>{canContinue ? 'Hồ sơ chưa có điểm chặn nghiêm trọng' : 'Chưa nên tiếp tục hồ sơ này'}</h2>
+        <div className="emptyState">
+          <strong>{nextAction}</strong>
+          <p>{canContinue
+            ? 'Người dùng có thể tiếp tục, nhưng vẫn cần xử lý các cảnh báo còn lại theo thứ tự ưu tiên.'
+            : 'Hãy xử lý điểm chặn đầu tiên trước; sau đó chạy kiểm tra lại để xác nhận hồ sơ đã an toàn.'}</p>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="eyebrow">ĐIỂM SAI VÀ RỦI RO</div>
+        <h2>Ở đâu sai, vì sao và phải làm gì tiếp?</h2>
+        <div className="dossierList">
+          {!issues.length && <div className="emptyState">Chưa phát hiện điểm chặn từ dữ liệu hiện có. Hãy chạy kiểm tra tài liệu để phân tích nội dung sâu hơn.</div>}
+          {issues.map((issue, index) => (
+            <article className="dossierItem" key={issue.id}>
+              <div>
+                <strong>{index + 1}. {issue.severity === 'critical' ? 'NGHIÊM TRỌNG' : issue.severity === 'warning' ? 'CẢNH BÁO' : 'CẦN HOÀN THIỆN'}</strong>
+                <h3>{issue.title}</h3>
+                <p><strong>Vì sao:</strong> {issue.why}</p>
+                <p><strong>Ảnh hưởng:</strong> {issue.impact}</p>
+                <p><strong>Cách xử lý:</strong> {issue.action}</p>
+              </div>
+              <div className="dossierMeta">
+                <span className="badge">{issue.severity === 'critical' ? 'Xử lý ngay' : issue.severity === 'warning' ? 'Ưu tiên sớm' : 'Cần bổ sung'}</span>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="panel">
