@@ -13,158 +13,62 @@ const dossierLabels: Record<string, string> = {
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
+    day: '2-digit', month: '2-digit', year: 'numeric',
   }).format(new Date(value));
 }
 
 export default async function DashboardPage() {
   const user = await requireUser();
-
   if (!user.enterpriseId) {
-    return (
-      <main className={styles.page}>
-        <div className={styles.container}>
-          <section className={styles.panel}>
-            <div className={styles.eyebrow}>HTL HỒ SƠ CHUẨN</div>
-            <h1>Chưa xác định doanh nghiệp</h1>
-            <p>
-              Tài khoản đã đăng nhập nhưng chưa được gắn với doanh nghiệp. Quản trị viên cần hoàn tất cấu hình trước khi sử dụng hệ thống.
-            </p>
-          </section>
-        </div>
-      </main>
-    );
+    return <main className={styles.page}><div className={styles.container}><section className={styles.panel}><div className={styles.eyebrow}>HTL HỒ SƠ CHUẨN</div><h1>Chưa xác định doanh nghiệp</h1><p>Quản trị viên cần gắn tài khoản này với doanh nghiệp trước khi sử dụng hệ thống.</p></section></div></main>;
   }
 
   const dashboard = await getEnterpriseDashboard(user.enterpriseId);
-  const priorityCount = dashboard.totals.expiredDocuments + dashboard.totals.expiringDocuments + dashboard.totals.activeWorkflows;
+  const urgent = dashboard.totals.expiredDocuments + dashboard.totals.expiringDocuments + dashboard.dossiersByStatus.rejected;
+  const waiting = dashboard.dossiersByStatus.draft + dashboard.dossiersByStatus.in_review;
+  const completed = dashboard.dossiersByStatus.approved + dashboard.totals.completedWorkflows;
 
   return (
     <main className={styles.page}>
       <div className={styles.container}>
         <header className={styles.header}>
-          <Link className={styles.brand} href="/">
-            <span className={styles.mark}>H</span>
-            <span>
-              <strong>HTL HỒ SƠ CHUẨN</strong>
-              <small>Trung tâm điều hành hồ sơ</small>
-            </span>
-          </Link>
-          <nav className={styles.nav} aria-label="Điều hướng chính">
-            <Link href="/ho-so">Danh sách hồ sơ</Link>
-            <Link href="/kiem-tra">Kiểm tra tài liệu</Link>
-            <Link href="/ho-so">Tạo hồ sơ</Link>
-          </nav>
+          <Link className={styles.brand} href="/"><span className={styles.mark}>H</span><span><strong>HTL HỒ SƠ CHUẨN</strong><small>Trung tâm điều hành công việc và hồ sơ</small></span></Link>
+          <nav className={styles.nav} aria-label="Điều hướng chính"><Link href="/ho-so">Hồ sơ</Link><Link href="/kiem-tra">Giải quyết việc đang vướng</Link><Link href="/ho-so">Tạo hồ sơ</Link></nav>
         </header>
 
         <section className={styles.hero}>
-          <article className={styles.heroMain}>
-            <div className={styles.eyebrow}>VIỆC CẦN BIẾT NGAY</div>
-            <h1>Hồ sơ nào cần xử lý và bước tiếp theo là gì?</h1>
-            <p>
-              Dashboard chỉ hiển thị các thông tin giúp người dùng hành động: hồ sơ đang có, tài liệu có rủi ro thời hạn và quy trình còn dang dở.
-            </p>
-          </article>
-          <aside className={styles.heroFocus}>
-            <span>CẦN QUAN TÂM</span>
-            <strong>{priorityCount}</strong>
-            <small>hạng mục cần theo dõi hoặc xử lý</small>
-          </aside>
+          <article className={styles.heroMain}><div className={styles.eyebrow}>VIỆC CẦN BIẾT NGAY</div><h1>Hôm nay cần xử lý việc gì để công việc không bị đình trệ?</h1><p>HTL gom các tín hiệu quan trọng về một nơi: hồ sơ cần xử lý, công việc đang chờ, kết quả đã hoàn thành và rủi ro thời hạn.</p></article>
+          <aside className={styles.heroFocus}><span>CẦN XỬ LÝ NGAY</span><strong>{urgent}</strong><small>hạng mục có thể gây chậm việc hoặc phát sinh rủi ro</small></aside>
         </section>
 
-        <section className={styles.metrics} aria-label="Chỉ số chính">
-          <article className={styles.metric}>
-            <span>Hồ sơ</span>
-            <strong>{dashboard.totals.dossiers}</strong>
-            <small>đang được quản lý</small>
-          </article>
-          <article className={styles.metric}>
-            <span>Tài liệu</span>
-            <strong>{dashboard.totals.documents}</strong>
-            <small>đã ghi nhận</small>
-          </article>
-          <article className={styles.metric}>
-            <span>Quy trình đang chạy</span>
-            <strong>{dashboard.totals.activeWorkflows}</strong>
-            <small>cần tiếp tục xử lý</small>
-          </article>
-          <article className={styles.metric}>
-            <span>Rủi ro thời hạn</span>
-            <strong>{dashboard.totals.expiredDocuments + dashboard.totals.expiringDocuments}</strong>
-            <small>hết hạn hoặc sắp hết hạn</small>
-          </article>
+        <section className={styles.metrics} aria-label="Tổng quan công việc">
+          <article className={styles.metric}><span>Tổng hồ sơ</span><strong>{dashboard.totals.dossiers}</strong><small>đang được quản lý</small></article>
+          <article className={styles.metric}><span>Cần xử lý ngay</span><strong>{urgent}</strong><small>lỗi, từ chối hoặc rủi ro thời hạn</small></article>
+          <article className={styles.metric}><span>Đang chờ</span><strong>{waiting}</strong><small>bản nháp hoặc đang xem xét</small></article>
+          <article className={styles.metric}><span>Đã hoàn thành</span><strong>{completed}</strong><small>hồ sơ hoặc quy trình đã hoàn tất</small></article>
+          <article className={styles.metric}><span>Quá hạn</span><strong>{dashboard.totals.expiredDocuments}</strong><small>tài liệu cần rà soát ngay</small></article>
         </section>
 
         <section className={styles.workGrid}>
           <article className={styles.panel}>
-            <div className={styles.panelHead}>
-              <div>
-                <div className={styles.eyebrow}>ƯU TIÊN XỬ LÝ</div>
-                <h2>Tài liệu có rủi ro thời hạn</h2>
-              </div>
-              <Link href="/ho-so">Xem hồ sơ</Link>
-            </div>
-
+            <div className={styles.panelHead}><div><div className={styles.eyebrow}>ƯU TIÊN XỬ LÝ</div><h2>Những việc có thể làm công việc bị chậm</h2></div><Link href="/ho-so">Xem toàn bộ</Link></div>
             <div className={styles.priorityList}>
-              {dashboard.totals.expiredDocuments > 0 && (
-                <div className={styles.priorityItem}>
-                  <span className={`${styles.dot} ${styles.danger}`} />
-                  <span>
-                    <strong>{dashboard.totals.expiredDocuments} tài liệu đã hết hạn</strong>
-                    <small>Cần rà soát và thay thế ngay.</small>
-                  </span>
-                  <Link href="/ho-so">Xử lý</Link>
-                </div>
-              )}
-
-              {dashboard.expiringDocuments.map((document) => (
-                <div className={styles.priorityItem} key={document.id}>
-                  <span className={styles.dot} />
-                  <span>
-                    <strong>{document.name}</strong>
-                    <small>Hết hạn ngày {formatDate(document.expires_at)}</small>
-                  </span>
-                  <Link href="/ho-so">Kiểm tra</Link>
-                </div>
-              ))}
-
-              {!dashboard.totals.expiredDocuments && !dashboard.expiringDocuments.length && (
-                <div className={styles.empty}>Không có tài liệu hết hạn hoặc sắp hết hạn trong 30 ngày tới.</div>
-              )}
+              {dashboard.totals.expiredDocuments > 0 && <div className={styles.priorityItem}><span className={`${styles.dot} ${styles.danger}`} /><span><strong>{dashboard.totals.expiredDocuments} tài liệu đã hết hạn</strong><small>Cần kiểm tra và thay thế trước khi tiếp tục sử dụng.</small></span><Link href="/ho-so">Xử lý</Link></div>}
+              {dashboard.expiringDocuments.map((document) => <div className={styles.priorityItem} key={document.id}><span className={styles.dot} /><span><strong>{document.name}</strong><small>Hết hạn ngày {formatDate(document.expires_at)}</small></span><Link href={`/ho-so/${document.dossier_id}`}>Mở hồ sơ</Link></div>)}
+              {!dashboard.totals.expiredDocuments && !dashboard.expiringDocuments.length && <div className={styles.empty}>Hiện chưa có tài liệu hết hạn hoặc sắp hết hạn trong 30 ngày tới.</div>}
             </div>
           </article>
 
           <article className={styles.panel}>
-            <div className={styles.panelHead}>
-              <div>
-                <div className={styles.eyebrow}>HỒ SƠ GẦN ĐÂY</div>
-                <h2>Tiếp tục công việc</h2>
-              </div>
-            </div>
-
+            <div className={styles.panelHead}><div><div className={styles.eyebrow}>CÔNG VIỆC GẦN ĐÂY</div><h2>Tiếp tục từ đúng nơi đang dở</h2></div></div>
             <div className={styles.recent}>
-              {dashboard.recentDossiers.map((dossier) => (
-                <Link className={styles.recentRow} href={`/ho-so/${dossier.id}`} key={dossier.id}>
-                  <span>
-                    <strong>{dossier.code}</strong>
-                    <small>{dossier.title} · Cập nhật {formatDate(dossier.updated_at)}</small>
-                  </span>
-                  <span className={styles.status}>{dossierLabels[dossier.status] ?? dossier.status}</span>
-                </Link>
-              ))}
-
-              {!dashboard.recentDossiers.length && (
-                <div className={styles.empty}>Chưa có hồ sơ. Hãy tạo hồ sơ đầu tiên để bắt đầu quy trình kiểm tra.</div>
-              )}
+              {dashboard.recentDossiers.map((dossier) => <Link className={styles.recentRow} href={`/ho-so/${dossier.id}`} key={dossier.id}><span><strong>{dossier.code}</strong><small>{dossier.title} · Cập nhật {formatDate(dossier.updated_at)}</small></span><span className={styles.status}>{dossierLabels[dossier.status] ?? dossier.status}</span></Link>)}
+              {!dashboard.recentDossiers.length && <div className={styles.empty}>Chưa có hồ sơ. Hãy tạo hồ sơ đầu tiên hoặc đưa ngay việc đang vướng vào HTL.</div>}
             </div>
           </article>
         </section>
 
-        <div className={styles.footerNote}>
-          HTL hỗ trợ phát hiện vấn đề và cung cấp căn cứ để người dùng xem xét. Quyết định cuối cùng luôn thuộc về người có trách nhiệm.
-        </div>
+        <div className={styles.footerNote}>Mục tiêu của Dashboard là giúp người dùng biết ngay: việc gì cần làm trước, hồ sơ nào đang chờ và khi nào có thể tiếp tục công việc.</div>
       </div>
     </main>
   );
