@@ -6,12 +6,13 @@ const protectedApiRoutes = ['/api/analyze'];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+  const pathname = request.nextUrl.pathname;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    if (request.nextUrl.pathname.startsWith('/api/')) {
+    if (pathname.startsWith('/api/')) {
       return NextResponse.json(
         { error: 'Hệ thống xác thực chưa được cấu hình đầy đủ.' },
         { status: 503 },
@@ -36,7 +37,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
   const isProtectedRoute = protectedRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
@@ -48,6 +48,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json(
       { error: 'Phiên đăng nhập đã hết hạn. Anh/chị vui lòng đăng nhập lại.' },
       { status: 401 },
+    );
+  }
+
+  if (isProtectedApiRoute && !process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      { error: 'Dịch vụ phân tích AI chưa được cấu hình. Quản trị viên cần bổ sung OPENAI_API_KEY.' },
+      { status: 503 },
     );
   }
 
