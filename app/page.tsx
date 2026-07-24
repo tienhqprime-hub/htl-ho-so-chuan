@@ -3,17 +3,17 @@ import RecoveryRedirect from './recovery-redirect';
 import LoginSubmitButton from './login-submit-button';
 import { login } from './dang-nhap/actions';
 
-const principles = [
-  ['01', 'Chỉ dựa trên hồ sơ được cung cấp', 'Mỗi nhận định phải quay lại được tài liệu, vị trí và bằng chứng cụ thể.'],
-  ['02', 'Nói rõ điều biết và chưa biết', 'Khi chưa đủ căn cứ, HTL nói thẳng thay vì suy đoán hoặc khẳng định quá mức.'],
-  ['03', 'Con người quyết định cuối cùng', 'AI hỗ trợ đọc, đối chiếu và cảnh báo; người sử dụng vẫn là người xem xét và quyết định.'],
+const commonProblems = [
+  ['01', 'Một chi tiết không rõ', 'Chữ mờ, số liệu khó đọc, thiếu dấu, thiếu chữ ký hoặc không xác định được vị trí cần kiểm tra.'],
+  ['02', 'Các tài liệu không khớp', 'Tên, số, ngày, số lượng, giá trị hoặc nội dung giữa hợp đồng, hóa đơn và chứng từ chưa thống nhất.'],
+  ['03', 'Không biết xử lý từ đâu', 'Nhân viên đang mắc việc nhưng chưa xác định được lỗi nằm ở đâu, cần hỏi ai và phải làm bước nào trước.'],
 ];
 
 const workflow = [
-  ['01', 'Tiếp nhận hồ sơ', 'Tải lên tài liệu và tập hợp hồ sơ theo từng doanh nghiệp hoặc công việc.'],
-  ['02', 'AI đọc và trích xuất', 'Nhận diện nội dung, số liệu, ngày tháng, chủ thể và các chi tiết có thể quan sát.'],
-  ['03', 'Đối chiếu và cảnh báo', 'So sánh giữa nhiều tài liệu để chỉ ra điểm phù hợp, chưa thống nhất hoặc còn thiếu.'],
-  ['04', 'Con người xem xét', 'Người dùng đọc bằng chứng, giới hạn và quyết định bước xử lý tiếp theo.'],
+  ['01', 'Tiếp nhận việc đang vướng', 'Tải tài liệu, ảnh, hồ sơ hoặc mô tả ngắn tình huống đang làm công việc bị đình trệ.'],
+  ['02', 'AI quan sát và phân loại', 'Nhận diện tài liệu là gì, nội dung nào đọc được, nội dung nào chưa rõ và bản chất vấn đề cần giải quyết.'],
+  ['03', 'Soi chiếu và chỉ ra sai lệch', 'Đối chiếu các nguồn, tìm điểm đúng, sai, thiếu, thừa, chưa thống nhất và dẫn lại bằng chứng cụ thể.'],
+  ['04', 'Đưa ra hướng xử lý', 'Sắp xếp việc cần làm theo thứ tự ưu tiên và nêu điều kiện để nhân viên có thể tiếp tục công việc.'],
 ];
 
 export default function HomePage() {
@@ -25,30 +25,30 @@ export default function HomePage() {
           <div className="brandMark" aria-hidden="true">H</div>
           <div>
             <div className="brand">HTL HỒ SƠ CHUẨN</div>
-            <div className="tagline">AI hỗ trợ kiểm tra và quản lý hồ sơ cần làm rõ</div>
+            <div className="tagline">AI giúp phát hiện sớm lỗi nhỏ trước khi thành rủi ro lớn</div>
           </div>
         </div>
         <div className="topbarMeta">
           <span className="systemOnline"><i aria-hidden="true" /> HỆ THỐNG SẴN SÀNG</span>
-          <span className="pilot">BẢN PILOT</span>
+          <span className="pilot">BẢN XUẤT BẢN</span>
         </div>
       </header>
 
       <section className="hero heroLayout">
         <div className="heroContent">
-          <div className="eyebrow">TRỢ LÝ AI CHUYÊN SÂU VỀ HỒ SƠ</div>
-          <h1>Đọc kỹ hồ sơ. Chỉ rõ bằng chứng. Nói thật giới hạn.</h1>
+          <div className="eyebrow">TRỢ LÝ AI GIẢI QUYẾT VƯỚNG MẮC HỒ SƠ TRONG DOANH NGHIỆP</div>
+          <h1>Đang mắc việc ở đâu, đưa vào HTL để tìm đúng chỗ cần xử lý.</h1>
           <p>
-            HTL giúp anh/chị quản lý hồ sơ, đối chiếu thông tin, phát hiện điểm chưa thống nhất và xác định việc cần làm tiếp theo mà không đưa ra kết luận vượt quá bằng chứng.
+            Một lỗi rất nhỏ trong hồ sơ có thể làm chậm nhập hàng, dừng sản xuất hoặc phát sinh chi phí lớn. HTL giúp nhân viên đọc, phân loại, soi chiếu và tìm hướng xử lý ngay để công việc không bị đình trệ.
           </p>
           <div className="heroActions">
-            <Link className="primary" href="/ho-so">Quản lý hồ sơ <span aria-hidden="true">→</span></Link>
-            <Link className="primary secondary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+            <Link className="primary" href="/kiem-tra">Giải quyết việc đang vướng <span aria-hidden="true">→</span></Link>
+            <Link className="primary secondary" href="/ho-so">Mở khu vực hồ sơ</Link>
           </div>
-          <div className="trustRow" aria-label="Các nguyên tắc vận hành">
-            <span>✓ Có bằng chứng</span>
-            <span>✓ Nêu rõ giới hạn</span>
-            <span>✓ Con người quyết định</span>
+          <div className="trustRow" aria-label="Giá trị HTL">
+            <span>✓ Chỉ rõ lỗi ở đâu</span>
+            <span>✓ Dẫn lại bằng chứng</span>
+            <span>✓ Hướng dẫn việc cần làm</span>
           </div>
         </div>
 
@@ -73,14 +73,14 @@ export default function HomePage() {
       </section>
 
       <section className="capabilityStrip" aria-label="Năng lực nền tảng">
-        <div><strong>01</strong><span>Quản lý hồ sơ tập trung</span></div>
-        <div><strong>02</strong><span>Trích xuất dữ liệu bằng AI</span></div>
-        <div><strong>03</strong><span>Đối chiếu nhiều tài liệu</span></div>
-        <div><strong>04</strong><span>Báo cáo có căn cứ</span></div>
+        <div><strong>01</strong><span>Tiếp nhận mọi vướng mắc</span></div>
+        <div><strong>02</strong><span>Đọc và phân loại bằng AI</span></div>
+        <div><strong>03</strong><span>Soi chiếu nhiều tài liệu</span></div>
+        <div><strong>04</strong><span>Chỉ rõ hướng xử lý</span></div>
       </section>
 
       <section className="grid">
-        {principles.map(([number, title, text]) => (
+        {commonProblems.map(([number, title, text]) => (
           <article className="card" key={number}>
             <strong>{number}</strong>
             <h3>{title}</h3>
@@ -90,39 +90,40 @@ export default function HomePage() {
       </section>
 
       <section className="panel">
-        <div className="eyebrow">HTL SẼ GIÚP ANH/CHỊ</div>
-        <h2>Quản lý, đọc, đối chiếu và giải thích hồ sơ theo cách dễ hiểu</h2>
+        <div className="eyebrow">MỤC TIÊU CỦA HTL</div>
+        <h2>Giải quyết 20% lỗi thường gặp đang làm ảnh hưởng đến 80% công việc hằng ngày</h2>
         <div className="twoCols">
           <div>
-            <h3>HTL có thể</h3>
+            <h3>HTL giúp nhân viên</h3>
             <ul>
-              <li>Tạo và theo dõi hồ sơ theo từng doanh nghiệp hoặc khách hàng.</li>
-              <li>Đọc nội dung, bảng biểu, dấu và chữ ký nhìn thấy được.</li>
-              <li>Đối chiếu tên, số, ngày tháng và số liệu giữa nhiều tài liệu.</li>
-              <li>Chỉ ra điểm phù hợp, mâu thuẫn, còn thiếu hoặc cần xác minh.</li>
+              <li>Đưa ngay tài liệu hoặc tình huống đang làm mình mắc việc vào hệ thống.</li>
+              <li>Nhìn thấy lỗi, sai lệch hoặc thông tin còn thiếu tại đúng vị trí.</li>
+              <li>Biết vì sao cần xử lý và căn cứ nào đang được sử dụng.</li>
+              <li>Có danh sách việc cần làm theo đúng thứ tự để tiếp tục công việc.</li>
             </ul>
           </div>
           <div>
-            <h3>HTL không thay thế</h3>
+            <h3>HTL giúp doanh nghiệp</h3>
             <ul>
-              <li>Giám định chuyên môn, công chứng hoặc cơ quan cấp phát.</li>
-              <li>Tư vấn pháp lý chính thức hay quyết định của con người.</li>
-              <li>Kết luận thật, giả khi chưa có đủ bằng chứng.</li>
+              <li>Giảm việc nhân viên phải hỏi lãnh đạo từng chi tiết nhỏ.</li>
+              <li>Phát hiện sai sót sớm trước khi gây đình trệ hoặc tổn thất lớn.</li>
+              <li>Lưu lại bằng chứng, kết quả kiểm tra và quá trình xử lý.</li>
+              <li>Nâng cao ý thức làm đúng ngay từ những chi tiết nhỏ nhất.</li>
             </ul>
           </div>
         </div>
         <div className="notice">
-          Báo cáo của HTL là công cụ hỗ trợ ra quyết định. Mỗi kết luận đều cần được đọc cùng bằng chứng và giới hạn đi kèm.
+          HTL hỗ trợ quan sát, đối chiếu và đề xuất hướng xử lý dựa trên tài liệu được cung cấp. Những nội dung chưa đủ căn cứ sẽ được nói rõ để người dùng xác minh thêm.
         </div>
       </section>
 
       <section className="workflowSection">
         <div className="sectionHeading">
           <div>
-            <div className="eyebrow">QUY TRÌNH LÀM VIỆC</div>
-            <h2>Từ tài liệu rời rạc đến một hồ sơ có thể kiểm tra</h2>
+            <div className="eyebrow">CÁCH HTL LÀM VIỆC</div>
+            <h2>Từ một vướng mắc nhỏ đến một hướng xử lý có thể thực hiện ngay</h2>
           </div>
-          <p>HTL tổ chức quá trình xử lý thành các bước rõ ràng để người dùng luôn biết hệ thống đang làm gì và cần xem xét điều gì.</p>
+          <p>Người dùng không cần biết tên thủ tục hay phải hỏi đúng chuyên gia. Chỉ cần đưa việc đang vướng và các tài liệu hiện có vào HTL.</p>
         </div>
         <div className="workflowGrid">
           {workflow.map(([number, title, text]) => (
@@ -138,23 +139,23 @@ export default function HomePage() {
 
       <section className="assurancePanel">
         <div>
-          <div className="eyebrow lightEyebrow">NGUYÊN TẮC TIN CẬY</div>
-          <h2>Không chỉ đưa ra câu trả lời. HTL chỉ rõ vì sao có câu trả lời đó.</h2>
+          <div className="eyebrow lightEyebrow">LINH HỒN CỦA HTL</div>
+          <h2>Gỡ một chiếc gai nhỏ trong công việc trước khi nó trở thành một tổn thất lớn.</h2>
         </div>
         <div className="assuranceList">
-          <div><b>01</b><span>Dẫn chiếu tài liệu và vị trí làm căn cứ.</span></div>
-          <div><b>02</b><span>Phân biệt dữ kiện, nhận định và điều chưa biết.</span></div>
-          <div><b>03</b><span>Giữ quyền quyết định cuối cùng cho con người.</span></div>
+          <div><b>01</b><span>Hiểu đúng việc người dùng đang mắc.</span></div>
+          <div><b>02</b><span>Chỉ rõ sai ở đâu và dựa trên bằng chứng nào.</span></div>
+          <div><b>03</b><span>Đưa ra hướng xử lý đơn giản, thiết thực và có thể kiểm tra.</span></div>
         </div>
       </section>
 
       <section className="finalCta">
         <div>
-          <div className="eyebrow">BẮT ĐẦU TỪ MỘT HỒ SƠ THẬT</div>
-          <h2>Đưa tài liệu vào một quy trình rõ ràng, có căn cứ và dễ kiểm soát.</h2>
+          <div className="eyebrow">BẮT ĐẦU TỪ VIỆC ĐANG LÀM ANH/CHỊ MẮC HÔM NAY</div>
+          <h2>Đưa tài liệu vào. HTL sẽ giúp tìm đúng điểm vướng và việc cần làm tiếp theo.</h2>
         </div>
         <div className="finalCtaActions">
-          <Link className="primary" href="/kiem-tra">Kiểm tra tài liệu <span aria-hidden="true">→</span></Link>
+          <Link className="primary" href="/kiem-tra">Bắt đầu kiểm tra <span aria-hidden="true">→</span></Link>
           <Link className="textLink" href="/ho-so">Mở khu vực hồ sơ</Link>
         </div>
       </section>
@@ -164,29 +165,29 @@ export default function HomePage() {
           <div className="brandMark" aria-hidden="true">H</div>
           <div>
             <strong>HTL HỒ SƠ CHUẨN</strong>
-            <p>AI hỗ trợ đọc, quản lý và đối chiếu hồ sơ dựa trên bằng chứng.</p>
+            <p>AI giúp phát hiện sớm lỗi nhỏ trước khi chúng gây ra rủi ro lớn.</p>
           </div>
         </div>
         <div className="footerColumns">
           <div>
             <b>Sản phẩm</b>
-            <Link href="/ho-so">Quản lý hồ sơ</Link>
-            <Link href="/kiem-tra">Kiểm tra tài liệu</Link>
+            <Link href="/kiem-tra">Giải quyết việc đang vướng</Link>
+            <Link href="/ho-so">Khu vực hồ sơ</Link>
           </div>
           <div>
             <b>Nguyên tắc</b>
-            <span>Có căn cứ</span>
-            <span>Nêu rõ giới hạn</span>
+            <span>Có bằng chứng</span>
+            <span>Nói rõ giới hạn</span>
           </div>
           <div>
             <b>Trạng thái</b>
             <span className="footerStatus"><i aria-hidden="true" /> Hệ thống hoạt động</span>
-            <span>Bản Pilot 1</span>
+            <span>Phiên bản 1.0</span>
           </div>
         </div>
         <div className="footerBottom">
           <span>© 2026 HTL Hồ Sơ Chuẩn</span>
-          <span>Công cụ hỗ trợ ra quyết định — không thay thế thẩm định chuyên môn.</span>
+          <span>Giúp người dùng bớt một việc khổ — giúp doanh nghiệp bớt một rủi ro.</span>
         </div>
       </footer>
     </main>
