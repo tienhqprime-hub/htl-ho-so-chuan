@@ -95,7 +95,7 @@ export default async function DossierDetailPage({
       time: dossier.created_at,
       title: 'Hồ sơ được tạo',
       detail: `${dossier.code} · ${dossier.title}`,
-      state: 'done',
+      state: 'done' as const,
     },
     ...documents.map((document) => ({
       id: `document-${document.id}`,
