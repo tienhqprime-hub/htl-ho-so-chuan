@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import RecoveryRedirect from './recovery-redirect';
 import LoginSubmitButton from './login-submit-button';
+import PasswordField from './password-field';
 import { login } from './dang-nhap/actions';
 
 const commonProblems = [
@@ -58,14 +59,11 @@ export default function HomePage() {
           <h2>Đăng nhập HTL</h2>
           <p>Truy cập hồ sơ và tiếp tục công việc đang thực hiện.</p>
           <form action={login} className="loginForm">
-            <label className="field">
+            <label className="field" htmlFor="email">
               <span>Email</span>
-              <input name="email" type="email" placeholder="ten@doanhnghiep.vn" autoComplete="email" inputMode="email" required />
+              <input id="email" name="email" type="email" placeholder="ten@doanhnghiep.vn" autoComplete="email" inputMode="email" required />
             </label>
-            <label className="field">
-              <span>Mật khẩu</span>
-              <input name="password" type="password" placeholder="Nhập mật khẩu" autoComplete="current-password" required />
-            </label>
+            <PasswordField />
             <LoginSubmitButton />
           </form>
           <div className="loginTrust">Phiên đăng nhập được bảo vệ và chỉ dùng để truy cập hồ sơ của anh/chị.</div>
