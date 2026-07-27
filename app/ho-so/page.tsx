@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import LogoutButton from '../logout-button';
 import { createDossierAction } from '../actions/dossiers';
 import { requireUser } from '../../lib/auth/authorization';
 import { listDossiers, type DossierStatus } from '../../lib/data/dossiers';
@@ -33,6 +34,7 @@ export default async function DossiersPage({
           <div className="eyebrow">MODULE QUẢN LÝ HỒ SƠ</div>
           <h1>Chưa xác định doanh nghiệp</h1>
           <p>Quản trị viên cần gắn tài khoản này với một doanh nghiệp trước khi tạo và quản lý hồ sơ.</p>
+          <LogoutButton />
         </section>
       </main>
     );
@@ -62,6 +64,7 @@ export default async function DossiersPage({
         <div className="actions">
           <Link className="secondary primary" href="/dashboard">Dashboard</Link>
           <Link className="primary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+          <LogoutButton />
         </div>
       </header>
 
