@@ -126,18 +126,8 @@ export default async function DossierDetailPage({
     }] : []),
   ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
+  const hasAssessmentData = documents.length > 0;
   const issues: OperationalIssue[] = [];
-
-  if (!documents.length) {
-    issues.push({
-      id: 'missing-documents',
-      severity: 'critical',
-      title: 'Hồ sơ chưa có tài liệu để kiểm tra',
-      why: 'Không có dữ liệu đầu vào nên hệ thống chưa thể đối chiếu nội dung, thời hạn hoặc tính đầy đủ.',
-      impact: 'Hồ sơ chưa đủ điều kiện để tiếp tục bước kiểm tra nghiệp vụ.',
-      action: 'Tải tài liệu đầu tiên lên hồ sơ và chạy kiểm tra.',
-    });
-  }
 
   for (const document of documents) {
     const remaining = daysUntil(document.expires_at);
@@ -198,30 +188,32 @@ export default async function DossierDetailPage({
   }
 
   const activeWorkflow = workflows.find((workflow) => workflow.status === 'active' || workflow.status === 'pending');
-  const nextAction = issues.length
-    ? issues[0].action
-    : activeWorkflow
-      ? `Tiếp tục công việc “${activeWorkflow.workflow_key}” tại bước “${activeWorkflow.current_step || 'xác định bước tiếp theo'}”.`
-      : dossier.status === 'approved'
-        ? 'Hồ sơ đã được phê duyệt. Có thể tiếp tục công việc nghiệp vụ liên quan.'
-        : documents.length
-          ? 'Chạy kiểm tra tài liệu để xác nhận hồ sơ đã sẵn sàng.'
-          : 'Tải tài liệu đầu tiên lên hồ sơ để bắt đầu kiểm tra.';
+  const nextAction = !hasAssessmentData
+    ? 'Tải tài liệu đầu tiên lên hồ sơ để hệ thống có dữ liệu đánh giá.'
+    : issues.length
+      ? issues[0].action
+      : activeWorkflow
+        ? `Tiếp tục công việc “${activeWorkflow.workflow_key}” tại bước “${activeWorkflow.current_step || 'xác định bước tiếp theo'}”.`
+        : dossier.status === 'approved'
+          ? 'Hồ sơ đã được phê duyệt. Có thể tiếp tục công việc nghiệp vụ liên quan.'
+          : 'Chạy kiểm tra tài liệu để xác nhận hồ sơ đã sẵn sàng.';
 
   const verifiedDocuments = documents.filter((document) => document.status === 'verified').length;
   const completedWorkflows = workflows.filter((workflow) => workflow.status === 'completed').length;
   const criticalIssues = issues.filter((issue) => issue.severity === 'critical').length;
   const warningIssues = issues.filter((issue) => issue.severity === 'warning').length;
-  const baseScore = documents.length ? 55 : 20;
-  const healthScore = Math.max(0, Math.min(100,
-    baseScore
-      + verifiedDocuments * 8
-      + completedWorkflows * 5
-      + (dossier.status === 'approved' ? 25 : 0)
-      - criticalIssues * 20
-      - warningIssues * 8,
-  ));
-  const canContinue = criticalIssues === 0 && dossier.status !== 'rejected';
+  const healthScore = hasAssessmentData
+    ? Math.max(0, Math.min(100,
+      55
+        + verifiedDocuments * 8
+        + completedWorkflows * 5
+        + (dossier.status === 'approved' ? 25 : 0)
+        - criticalIssues * 20
+        - warningIssues * 8,
+    ))
+    : null;
+  const canContinue = hasAssessmentData && criticalIssues === 0 && dossier.status !== 'rejected';
+  const progressLabel = !hasAssessmentData ? 'Chưa đánh giá' : canContinue ? 'Có' : 'Chưa';
 
   return (
     <main className="shell">
@@ -251,8 +243,8 @@ export default async function DossierDetailPage({
             <p className="muted">{dossier.description || 'Chưa có mô tả chi tiết.'}</p>
           </div>
           <div className="score">
-            <strong>{healthScore}</strong>
-            <span>Sức khỏe hồ sơ</span>
+            <strong>{healthScore ?? '—'}</strong>
+            <span>{hasAssessmentData ? 'Sức khỏe hồ sơ' : 'Chưa đủ dữ liệu'}</span>
           </div>
         </div>
 
@@ -260,20 +252,26 @@ export default async function DossierDetailPage({
           <div><strong>Trạng thái:</strong> {dossierStatusLabels[dossier.status]}</div>
           <div><strong>Phân loại:</strong> {dossier.category || 'Chưa phân loại'}</div>
           <div><strong>Tài liệu:</strong> {documents.length}</div>
-          <div><strong>Vấn đề:</strong> {issues.length}</div>
-          <div><strong>Có thể đi tiếp:</strong> {canContinue ? 'Có' : 'Chưa'}</div>
+          <div><strong>Vấn đề:</strong> {hasAssessmentData ? issues.length : 'Chưa đánh giá'}</div>
+          <div><strong>Có thể đi tiếp:</strong> {progressLabel}</div>
           <div><strong>Cập nhật:</strong> {formatDate(dossier.updated_at)}</div>
         </div>
       </section>
 
       <section className="panel">
         <div className="eyebrow">KẾT LUẬN ĐIỀU HÀNH</div>
-        <h2>{canContinue ? 'Hồ sơ chưa có điểm chặn nghiêm trọng' : 'Chưa nên tiếp tục hồ sơ này'}</h2>
+        <h2>{!hasAssessmentData
+          ? 'Chưa đủ dữ liệu để đưa ra kết luận'
+          : canContinue
+            ? 'Hồ sơ chưa có điểm chặn nghiêm trọng'
+            : 'Chưa nên tiếp tục hồ sơ này'}</h2>
         <div className="emptyState">
           <strong>{nextAction}</strong>
-          <p>{canContinue
-            ? 'Người dùng có thể tiếp tục, nhưng vẫn cần xử lý các cảnh báo còn lại theo thứ tự ưu tiên.'
-            : 'Hãy xử lý điểm chặn đầu tiên trước; sau đó chạy kiểm tra lại để xác nhận hồ sơ đã an toàn.'}</p>
+          <p>{!hasAssessmentData
+            ? 'Hệ thống chưa chấm điểm và chưa kết luận hồ sơ đạt hay không đạt khi chưa có tài liệu đầu vào.'
+            : canContinue
+              ? 'Người dùng có thể tiếp tục, nhưng vẫn cần xử lý các cảnh báo còn lại theo thứ tự ưu tiên.'
+              : 'Hãy xử lý điểm chặn đầu tiên trước; sau đó chạy kiểm tra lại để xác nhận hồ sơ đã an toàn.'}</p>
         </div>
       </section>
 
@@ -281,7 +279,8 @@ export default async function DossierDetailPage({
         <div className="eyebrow">ĐIỂM SAI VÀ RỦI RO</div>
         <h2>Ở đâu sai, vì sao và phải làm gì tiếp?</h2>
         <div className="dossierList">
-          {!issues.length && <div className="emptyState">Chưa phát hiện điểm chặn từ dữ liệu hiện có. Hãy chạy kiểm tra tài liệu để phân tích nội dung sâu hơn.</div>}
+          {!hasAssessmentData && <div className="emptyState">Chưa có tài liệu để đánh giá. Đây không phải là kết quả thất bại; hãy tải tài liệu đầu tiên để bắt đầu kiểm tra.</div>}
+          {hasAssessmentData && !issues.length && <div className="emptyState">Chưa phát hiện điểm chặn từ dữ liệu hiện có. Hãy chạy kiểm tra tài liệu để phân tích nội dung sâu hơn.</div>}
           {issues.map((issue, index) => (
             <article className="dossierItem" key={issue.id}>
               <div>
