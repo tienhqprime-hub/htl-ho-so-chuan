@@ -59,6 +59,13 @@ function validateTimeline(
   }
 }
 
+function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === '42P01'
+    || error.code === 'PGRST205'
+    || Boolean(error.message?.toLowerCase().includes('workflow_instances'));
+}
+
 export async function listWorkflowsByDossier(
   dossierId: string,
 ): Promise<WorkflowInstance[]> {
@@ -69,6 +76,8 @@ export async function listWorkflowsByDossier(
     .eq('dossier_id', dossierId)
     .order('updated_at', { ascending: false });
 
+  // Version 1 vẫn cho phép mở hồ sơ khi module quy trình chưa được khởi tạo.
+  if (isMissingTableError(error)) return [];
   if (error) throw new Error(`Không thể tải quy trình: ${error.message}`);
   return (data ?? []) as WorkflowInstance[];
 }
@@ -84,6 +93,7 @@ export async function listAssignedWorkflows(
     .in('status', ['pending', 'active'])
     .order('updated_at', { ascending: false });
 
+  if (isMissingTableError(error)) return [];
   if (error) throw new Error(`Không thể tải công việc được giao: ${error.message}`);
   return (data ?? []) as WorkflowInstance[];
 }
