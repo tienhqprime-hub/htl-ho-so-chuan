@@ -69,6 +69,13 @@ function validateDates(issuedAt?: string | null, expiresAt?: string | null): voi
   }
 }
 
+function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === '42P01'
+    || error.code === 'PGRST205'
+    || Boolean(error.message?.toLowerCase().includes('dossier_documents'));
+}
+
 export async function listDocumentsByDossier(
   dossierId: string,
 ): Promise<DossierDocument[]> {
@@ -79,6 +86,8 @@ export async function listDocumentsByDossier(
     .eq('dossier_id', dossierId)
     .order('updated_at', { ascending: false });
 
+  // Version 1 vẫn cho phép mở hồ sơ khi module tài liệu chưa được khởi tạo.
+  if (isMissingTableError(error)) return [];
   if (error) throw new Error(`Không thể tải tài liệu: ${error.message}`);
   return (data ?? []) as DossierDocument[];
 }
