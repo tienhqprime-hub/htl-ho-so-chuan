@@ -26,12 +26,12 @@ export default function HomePage() {
           <div className="brandMark" aria-hidden="true">H</div>
           <div>
             <div className="brand">HTL HỒ SƠ CHUẨN</div>
-            <div className="tagline">AI giúp phát hiện sớm lỗi nhỏ trước khi thành rủi ro lớn</div>
+            <div className="tagline">AI giúp phát hiện sớm rủi ro trong hồ sơ doanh nghiệp</div>
           </div>
         </div>
         <div className="topbarMeta">
           <span className="systemOnline"><i aria-hidden="true" /> HỆ THỐNG SẴN SÀNG</span>
-          <span className="pilot">BẢN XUẤT BẢN</span>
+          <span className="pilot">PHIÊN BẢN 1.0</span>
         </div>
       </header>
 
@@ -163,7 +163,7 @@ export default function HomePage() {
           <div className="brandMark" aria-hidden="true">H</div>
           <div>
             <strong>HTL HỒ SƠ CHUẨN</strong>
-            <p>AI giúp phát hiện sớm lỗi nhỏ trước khi chúng gây ra rủi ro lớn.</p>
+            <p>AI giúp phát hiện sớm rủi ro trong hồ sơ doanh nghiệp.</p>
           </div>
         </div>
         <div className="footerColumns">
