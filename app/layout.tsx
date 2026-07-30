@@ -1,6 +1,5 @@
 import './styles.css';
 import type { Metadata } from 'next';
-import FileUploadEnhancer from './file-upload-enhancer';
 
 export const metadata: Metadata = {
   title: 'HTL HỒ SƠ CHUẨN',
@@ -10,10 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body>
-        <FileUploadEnhancer />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
