@@ -10,6 +10,7 @@ import {
   getDocument,
   updateDocument,
   type CreateDocumentInput,
+  type DocumentRecord,
   type DocumentStatus,
   type UpdateDocumentInput,
 } from '../../lib/data/documents';
@@ -84,6 +85,15 @@ function validateFile(file: FormDataEntryValue | null): asserts file is File {
   }
 }
 
+async function requireDocumentAccess(documentId: string, dossierId?: string): Promise<DocumentRecord> {
+  const document = await getDocument(documentId);
+  if (!document || (dossierId && document.dossier_id !== dossierId)) {
+    throw new Error('Không tìm thấy tài liệu hoặc tài liệu không thuộc hồ sơ này.');
+  }
+  await requireEnterpriseAccess(document.enterprise_id);
+  return document;
+}
+
 function revalidateDocumentViews(dossierId?: string, documentId?: string): void {
   revalidatePath('/');
   revalidatePath('/dashboard');
@@ -147,10 +157,8 @@ export async function uploadDocumentAction(formData: FormData): Promise<void> {
 export async function replaceDocumentAction(formData: FormData): Promise<void> {
   const documentId = readRequired(formData, 'documentId', 'Tài liệu');
   const dossierId = readRequired(formData, 'dossierId', 'Hồ sơ');
-  const document = await getDocument(documentId);
-  if (!document || document.dossier_id !== dossierId) throw new Error('Không tìm thấy tài liệu cần thay.');
+  const document = await requireDocumentAccess(documentId, dossierId);
 
-  await requireEnterpriseAccess(document.enterprise_id);
   const file = formData.get('file');
   validateFile(file);
 
@@ -197,13 +205,10 @@ export async function replaceDocumentAction(formData: FormData): Promise<void> {
 export async function deleteDocumentFormAction(formData: FormData): Promise<void> {
   const documentId = readRequired(formData, 'documentId', 'Tài liệu');
   const dossierId = readRequired(formData, 'dossierId', 'Hồ sơ');
-  const document = await getDocument(documentId);
-  if (!document || document.dossier_id !== dossierId) throw new Error('Không tìm thấy tài liệu cần xóa.');
-
-  await requireEnterpriseAccess(document.enterprise_id);
+  const document = await requireDocumentAccess(documentId, dossierId);
   const supabase = await createSupabaseServerClient();
-  await deleteDocument(documentId);
 
+  await deleteDocument(documentId);
   if (document.storage_path) {
     await supabase.storage.from(DOCUMENT_BUCKET).remove([document.storage_path]);
   }
@@ -247,6 +252,7 @@ export async function updateDocumentAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    await requireDocumentAccess(documentId, dossierId);
     const input: UpdateDocumentInput = {};
     if (formData.has('name')) input.name = readRequired(formData, 'name', 'Tên tài liệu');
     if (formData.has('documentType')) input.document_type = readOptional(formData, 'documentType');
@@ -273,6 +279,7 @@ export async function changeDocumentStatusAction(
   status: DocumentStatus,
 ): Promise<ActionResult> {
   try {
+    await requireDocumentAccess(documentId, dossierId);
     await updateDocument(documentId, { status });
     revalidateDocumentViews(dossierId, documentId);
     return { ok: true };
@@ -283,8 +290,15 @@ export async function changeDocumentStatusAction(
 
 export async function deleteDocumentAction(documentId: string, dossierId: string): Promise<ActionResult> {
   try {
+    const document = await requireDocumentAccess(documentId, dossierId);
+    const supabase = await createSupabaseServerClient();
+
     await deleteDocument(documentId);
-    revalidateDocumentViews(dossierId);
+    if (document.storage_path) {
+      await supabase.storage.from(DOCUMENT_BUCKET).remove([document.storage_path]);
+    }
+
+    revalidateDocumentViews(dossierId, documentId);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Không thể xóa tài liệu.' };
