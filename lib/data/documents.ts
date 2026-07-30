@@ -7,6 +7,14 @@ export type DocumentStatus =
   | 'expired'
   | 'archived';
 
+const DOCUMENT_STATUSES = new Set<DocumentStatus>([
+  'draft',
+  'submitted',
+  'verified',
+  'expired',
+  'archived',
+]);
+
 export type DossierDocument = {
   id: string;
   enterprise_id: string;
@@ -69,6 +77,24 @@ function validateDates(issuedAt?: string | null, expiresAt?: string | null): voi
   }
 }
 
+function validateVersion(version: number | undefined): void {
+  if (version != null && (!Number.isInteger(version) || version < 1)) {
+    throw new Error('Phiên bản tài liệu phải là số nguyên lớn hơn 0.');
+  }
+}
+
+function validateFileSize(fileSize: number | null | undefined): void {
+  if (fileSize != null && (!Number.isFinite(fileSize) || fileSize < 0)) {
+    throw new Error('Kích thước tệp không hợp lệ.');
+  }
+}
+
+function validateStatus(status: DocumentStatus | undefined): void {
+  if (status && !DOCUMENT_STATUSES.has(status)) {
+    throw new Error('Trạng thái tài liệu không hợp lệ.');
+  }
+}
+
 function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   return error.code === '42P01'
@@ -86,7 +112,6 @@ export async function listDocumentsByDossier(
     .eq('dossier_id', dossierId)
     .order('updated_at', { ascending: false });
 
-  // Version 1 vẫn cho phép mở hồ sơ khi module tài liệu chưa được khởi tạo.
   if (isMissingTableError(error)) return [];
   if (error) throw new Error(`Không thể tải tài liệu: ${error.message}`);
   return (data ?? []) as DossierDocument[];
@@ -108,10 +133,9 @@ export async function createDocument(
   input: CreateDocumentInput,
 ): Promise<DossierDocument> {
   validateDates(input.issuedAt, input.expiresAt);
-
-  if (input.fileSize != null && input.fileSize < 0) {
-    throw new Error('Kích thước tệp không hợp lệ.');
-  }
+  validateFileSize(input.fileSize);
+  validateVersion(input.version);
+  validateStatus(input.status);
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -149,14 +173,24 @@ export async function updateDocument(
   id: string,
   input: UpdateDocumentInput,
 ): Promise<DossierDocument> {
-  validateDates(input.issued_at, input.expires_at);
+  validateFileSize(input.file_size);
+  validateVersion(input.version);
+  validateStatus(input.status);
 
-  if (input.file_size != null && input.file_size < 0) {
-    throw new Error('Kích thước tệp không hợp lệ.');
-  }
-  if (input.version != null && input.version < 1) {
-    throw new Error('Phiên bản tài liệu phải lớn hơn 0.');
-  }
+  const supabase = await createSupabaseServerClient();
+  const { data: current, error: currentError } = await supabase
+    .from('dossier_documents')
+    .select('issued_at, expires_at')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (currentError) throw new Error(`Không thể kiểm tra tài liệu: ${currentError.message}`);
+  if (!current) throw new Error('Không tìm thấy tài liệu cần cập nhật.');
+
+  validateDates(
+    input.issued_at !== undefined ? input.issued_at : current.issued_at,
+    input.expires_at !== undefined ? input.expires_at : current.expires_at,
+  );
 
   const payload: UpdateDocumentInput = { ...input };
   if (typeof payload.name === 'string') {
@@ -172,7 +206,6 @@ export async function updateDocument(
     payload.mime_type = payload.mime_type.trim() || null;
   }
 
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('dossier_documents')
     .update(payload)
