@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { uploadDocumentAction } from '../../actions/documents';
+import {
+  deleteDocumentFormAction,
+  replaceDocumentAction,
+  uploadDocumentAction,
+} from '../../actions/documents';
 import { requireEnterpriseAccess } from '../../../lib/auth/authorization';
 import { getDossier, type DossierStatus } from '../../../lib/data/dossiers';
 import {
@@ -354,6 +358,26 @@ export default async function DossierDetailPage({
                 <span className="badge">{documentStatusLabels[document.status]}</span>
                 <small>Cập nhật {formatDate(document.updated_at)}</small>
                 <span className="primary secondary dossierAction">{document.storage_path ? 'Đã lưu Storage' : 'Chưa có tệp'}</span>
+
+                <details>
+                  <summary className="primary secondary dossierAction">Thay tài liệu</summary>
+                  <form action={replaceDocumentAction} encType="multipart/form-data" className="dossierForm">
+                    <input name="documentId" type="hidden" value={document.id} />
+                    <input name="dossierId" type="hidden" value={dossier.id} />
+                    <input name="name" placeholder="Tên hiển thị mới (không bắt buộc)" />
+                    <input name="documentType" defaultValue={document.document_type || ''} placeholder="Loại tài liệu" />
+                    <input name="issuedAt" type="date" defaultValue={document.issued_at || ''} aria-label="Ngày cấp" />
+                    <input name="expiresAt" type="date" defaultValue={document.expires_at || ''} aria-label="Ngày hết hạn" />
+                    <input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" required />
+                    <button className="primary" type="submit">Xác nhận thay tài liệu</button>
+                  </form>
+                </details>
+
+                <form action={deleteDocumentFormAction}>
+                  <input name="documentId" type="hidden" value={document.id} />
+                  <input name="dossierId" type="hidden" value={dossier.id} />
+                  <button className="primary secondary dossierAction" type="submit">Xóa tài liệu</button>
+                </form>
               </div>
             </article>
           ))}
