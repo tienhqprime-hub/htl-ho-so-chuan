@@ -7,6 +7,7 @@ import { requireEnterpriseAccess } from '../../lib/auth/authorization';
 import {
   createDocument,
   deleteDocument,
+  getDocument,
   updateDocument,
   type CreateDocumentInput,
   type DocumentStatus,
@@ -71,6 +72,18 @@ function safeFilename(filename: string): string {
   return `${basename}${extension}`;
 }
 
+function validateFile(file: FormDataEntryValue | null): asserts file is File {
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error('Anh cần chọn một tệp để tải lên.');
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('Tệp vượt quá giới hạn 20 MB.');
+  }
+  if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    throw new Error('Định dạng chưa được hỗ trợ. Hệ thống nhận PDF, Word, Excel, JPG và PNG.');
+  }
+}
+
 function revalidateDocumentViews(dossierId?: string, documentId?: string): void {
   revalidatePath('/');
   revalidatePath('/dashboard');
@@ -90,15 +103,7 @@ export async function uploadDocumentAction(formData: FormData): Promise<void> {
   await requireEnterpriseAccess(enterpriseId);
 
   const file = formData.get('file');
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error('Anh cần chọn một tệp để tải lên.');
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error('Tệp vượt quá giới hạn 20 MB.');
-  }
-  if (!ALLOWED_MIME_TYPES.has(file.type)) {
-    throw new Error('Định dạng chưa được hỗ trợ. Hệ thống nhận PDF, Word, Excel, JPG và PNG.');
-  }
+  validateFile(file);
 
   const storagePath = `${enterpriseId}/${dossierId}/${randomUUID()}-${safeFilename(file.name)}`;
   const supabase = await createSupabaseServerClient();
@@ -137,6 +142,74 @@ export async function uploadDocumentAction(formData: FormData): Promise<void> {
   }
 
   redirect(`/ho-so/${dossierId}?uploaded=1`);
+}
+
+export async function replaceDocumentAction(formData: FormData): Promise<void> {
+  const documentId = readRequired(formData, 'documentId', 'Tài liệu');
+  const dossierId = readRequired(formData, 'dossierId', 'Hồ sơ');
+  const document = await getDocument(documentId);
+  if (!document || document.dossier_id !== dossierId) throw new Error('Không tìm thấy tài liệu cần thay.');
+
+  await requireEnterpriseAccess(document.enterprise_id);
+  const file = formData.get('file');
+  validateFile(file);
+
+  const storagePath = `${document.enterprise_id}/${dossierId}/${randomUUID()}-${safeFilename(file.name)}`;
+  const supabase = await createSupabaseServerClient();
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const { error: uploadError } = await supabase.storage
+    .from(DOCUMENT_BUCKET)
+    .upload(storagePath, bytes, { contentType: file.type, upsert: false });
+
+  if (uploadError) throw new Error(`Không thể tải tệp thay thế: ${uploadError.message}`);
+
+  try {
+    await updateDocument(documentId, {
+      name: readOptional(formData, 'name') || file.name,
+      document_type: readOptional(formData, 'documentType') ?? document.document_type,
+      storage_path: storagePath,
+      mime_type: file.type,
+      file_size: file.size,
+      version: document.version + 1,
+      status: 'submitted',
+      issued_at: readOptional(formData, 'issuedAt') ?? document.issued_at,
+      expires_at: readOptional(formData, 'expiresAt') ?? document.expires_at,
+      metadata: {
+        ...document.metadata,
+        original_filename: file.name,
+        replaced_at: new Date().toISOString(),
+        previous_storage_path: document.storage_path,
+      },
+    });
+  } catch (error) {
+    await supabase.storage.from(DOCUMENT_BUCKET).remove([storagePath]);
+    throw error;
+  }
+
+  if (document.storage_path) {
+    await supabase.storage.from(DOCUMENT_BUCKET).remove([document.storage_path]);
+  }
+
+  revalidateDocumentViews(dossierId, documentId);
+  redirect(`/ho-so/${dossierId}?replaced=1`);
+}
+
+export async function deleteDocumentFormAction(formData: FormData): Promise<void> {
+  const documentId = readRequired(formData, 'documentId', 'Tài liệu');
+  const dossierId = readRequired(formData, 'dossierId', 'Hồ sơ');
+  const document = await getDocument(documentId);
+  if (!document || document.dossier_id !== dossierId) throw new Error('Không tìm thấy tài liệu cần xóa.');
+
+  await requireEnterpriseAccess(document.enterprise_id);
+  const supabase = await createSupabaseServerClient();
+  await deleteDocument(documentId);
+
+  if (document.storage_path) {
+    await supabase.storage.from(DOCUMENT_BUCKET).remove([document.storage_path]);
+  }
+
+  revalidateDocumentViews(dossierId, documentId);
+  redirect(`/ho-so/${dossierId}?deleted=1`);
 }
 
 export async function createDocumentAction(
