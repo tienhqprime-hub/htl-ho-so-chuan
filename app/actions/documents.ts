@@ -10,7 +10,7 @@ import {
   getDocument,
   updateDocument,
   type CreateDocumentInput,
-  type DocumentRecord,
+  type DossierDocument,
   type DocumentStatus,
   type UpdateDocumentInput,
 } from '../../lib/data/documents';
@@ -85,7 +85,7 @@ function validateFile(file: FormDataEntryValue | null): asserts file is File {
   }
 }
 
-async function requireDocumentAccess(documentId: string, dossierId?: string): Promise<DocumentRecord> {
+async function requireDocumentAccess(documentId: string, dossierId?: string): Promise<DossierDocument> {
   const document = await getDocument(documentId);
   if (!document || (dossierId && document.dossier_id !== dossierId)) {
     throw new Error('Không tìm thấy tài liệu hoặc tài liệu không thuộc hồ sơ này.');
