@@ -104,7 +104,7 @@ function renderControls(): void {
     const actions = document.createElement('div');
     actions.className = 'fileRowActions';
 
-    const reload = buildButton('↻ Thay file', 'fileActionButton', () => {
+    const reload = buildButton('↻ Tải lại', 'fileActionButton', () => {
       const chooser = document.createElement('input');
       chooser.type = 'file';
       chooser.accept = ACCEPTED_TYPES;
@@ -123,7 +123,7 @@ function renderControls(): void {
       chooser.click();
     });
 
-    const remove = buildButton('🗑 Xóa', 'fileActionButton fileActionDanger', () => {
+    const remove = buildButton('🗑 Xóa do nhầm', 'fileActionButton fileActionDanger', () => {
       const currentInput = getUploadInput();
       if (!currentInput) return;
       const nextFiles = Array.from(currentInput.files || []).filter((_, fileIndex) => fileIndex !== index);
