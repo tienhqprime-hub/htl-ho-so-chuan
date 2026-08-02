@@ -1,4 +1,5 @@
 import './styles.css';
+import './result-release.css';
 import type { Metadata } from 'next';
 import FileUploadEnhancer from './file-upload-enhancer';
 
