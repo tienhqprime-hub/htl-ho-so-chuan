@@ -123,16 +123,13 @@
 }
 
 .result .actions {
-  position: sticky;
-  bottom: 12px;
-  z-index: 4;
+  position: static;
   margin-top: 26px;
   padding: 12px;
   border: 1px solid #dce5ef;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 30px rgba(23, 32, 51, 0.12);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(23, 32, 51, 0.08);
 }
 
 @media (max-width: 760px) {
@@ -142,10 +139,6 @@
 
   .result .score {
     width: 100%;
-  }
-
-  .result .actions {
-    position: static;
   }
 }
 
