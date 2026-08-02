@@ -30,11 +30,52 @@ export default async function DossiersPage({
   if (!user.enterpriseId) {
     return (
       <main className="shell">
-        <section className="panel emptyState">
-          <div className="eyebrow">MODULE QUẢN LÝ HỒ SƠ</div>
-          <h1>Chưa xác định doanh nghiệp</h1>
-          <p>Quản trị viên cần gắn tài khoản này với một doanh nghiệp trước khi tạo và quản lý hồ sơ.</p>
-          <LogoutButton />
+        <header className="topbar">
+          <div>
+            <Link className="brand" href="/">HTL HỒ SƠ CHUẨN</Link>
+            <div className="tagline">Kiểm soát rủi ro trong hồ sơ và tài liệu quan trọng</div>
+          </div>
+          <div className="actions">
+            <Link className="primary" href="/kiem-tra">Kiểm tra tài liệu</Link>
+            <LogoutButton />
+          </div>
+        </header>
+
+        <section className="panel" style={{ maxWidth: 900, margin: '32px auto' }}>
+          <div className="eyebrow">KHU VỰC HỒ SƠ CỦA TÔI</div>
+          <h1>Bắt đầu kiểm tra tài liệu</h1>
+          <p className="muted">
+            Tải tài liệu hoặc hồ sơ cần làm rõ. HTL sẽ chỉ ra nội dung đúng, nội dung sai hoặc chưa đầy đủ,
+            đồng thời đề xuất cách khắc phục để anh/chị tiếp tục công việc.
+          </p>
+
+          <div className="notice" style={{ marginTop: 24 }}>
+            <strong>Nguyên tắc sử dụng:</strong> Kết quả được lưu theo tài khoản đăng nhập của anh/chị.
+            Không cần tạo doanh nghiệp để bắt đầu sử dụng HTL.
+          </div>
+
+          <div className="actions" style={{ marginTop: 28, justifyContent: 'flex-start' }}>
+            <Link className="primary" href="/kiem-tra">Tải hồ sơ cần kiểm tra →</Link>
+            <Link className="primary secondary" href="/kiem-tra">Mở lịch sử xử lý</Link>
+          </div>
+        </section>
+
+        <section className="panel" style={{ maxWidth: 900, margin: '0 auto' }}>
+          <div className="eyebrow">HTL HỖ TRỢ 4 VIỆC CỐT LÕI</div>
+          <div className="dossierList">
+            <article className="dossierItem">
+              <div><strong>01</strong><h3>Chỉ ra nội dung đúng</h3><p>Xác định phần có căn cứ, thống nhất và có thể tiếp tục sử dụng.</p></div>
+            </article>
+            <article className="dossierItem">
+              <div><strong>02</strong><h3>Chỉ ra nội dung sai</h3><p>Phát hiện điểm sai, mâu thuẫn hoặc có nguy cơ gây rủi ro.</p></div>
+            </article>
+            <article className="dossierItem">
+              <div><strong>03</strong><h3>Chỉ ra phần chưa đầy đủ</h3><p>Nêu rõ thông tin, bằng chứng hoặc tài liệu còn thiếu.</p></div>
+            </article>
+            <article className="dossierItem">
+              <div><strong>04</strong><h3>Đề xuất cách khắc phục</h3><p>Sắp xếp việc cần làm theo thứ tự để người dùng xử lý ngay.</p></div>
+            </article>
+          </div>
         </section>
       </main>
     );
