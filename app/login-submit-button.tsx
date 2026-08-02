@@ -21,12 +21,21 @@ export default function LoginSubmitButton() {
           </>
         )}
       </button>
+
       <Link
         href="/dang-ky"
         className="primary secondary button loginSubmit"
         style={{ marginTop: 10, textAlign: 'center', display: 'block' }}
       >
         Đăng ký miễn phí
+      </Link>
+
+      <Link
+        href="/quen-mat-khau"
+        className="textLink"
+        style={{ marginTop: 12, textAlign: 'center', display: 'block' }}
+      >
+        Quên mật khẩu?
       </Link>
     </>
   );
