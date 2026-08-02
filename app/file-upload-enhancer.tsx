@@ -34,6 +34,7 @@ function renderControls(): void {
   const upload = input?.closest<HTMLLabelElement>('label.upload');
   if (!input || !upload) return;
 
+  const fileCount = input.files?.length ?? 0;
   let counter = upload.querySelector<HTMLSpanElement>('.uploadFileCounter');
   if (!counter) {
     counter = document.createElement('span');
@@ -41,7 +42,8 @@ function renderControls(): void {
     counter.setAttribute('aria-live', 'polite');
     upload.appendChild(counter);
   }
-  counter.textContent = `📎 ${input.files?.length ?? 0}`;
+  counter.textContent = `${fileCount} tệp`;
+  counter.title = `Đã chọn ${fileCount}/${MAX_FILES} tệp`;
 
   const fileList = document.querySelector<HTMLElement>('.fileList');
   if (!fileList) return;
@@ -49,19 +51,25 @@ function renderControls(): void {
   const rows = Array.from(fileList.children).filter(
     (child): child is HTMLElement => child instanceof HTMLElement,
   );
-  const totalRow = rows.find(
-    (row) => row.querySelector('strong')?.textContent?.trim() === 'Tổng cộng',
-  );
-  if (totalRow) totalRow.hidden = true;
+  const totalRow = rows.find((row) => row.textContent?.includes('Tổng cộng'));
+  if (totalRow) {
+    totalRow.setAttribute('aria-hidden', 'true');
+    totalRow.style.setProperty('display', 'none', 'important');
+  }
 
   rows.filter((row) => row !== totalRow).forEach((row, index) => {
     row.classList.add('smartFileRow');
     row.querySelector('.fileRowActions')?.remove();
 
+    const fileName = row.querySelector<HTMLElement>('strong');
+    if (fileName) {
+      fileName.title = fileName.textContent?.trim() || '';
+    }
+
     const actions = document.createElement('div');
     actions.className = 'fileRowActions';
 
-    const reload = buildButton('Tải lại', 'fileActionButton', () => {
+    const reload = buildButton('↻ Thay file', 'fileActionButton', () => {
       const chooser = document.createElement('input');
       chooser.type = 'file';
       chooser.accept = ACCEPTED_TYPES;
@@ -80,7 +88,7 @@ function renderControls(): void {
       chooser.click();
     });
 
-    const remove = buildButton('Xóa do nhầm', 'fileActionButton fileActionDanger', () => {
+    const remove = buildButton('🗑 Xóa', 'fileActionButton fileActionDanger', () => {
       const currentInput = getUploadInput();
       if (!currentInput) return;
       const nextFiles = Array.from(currentInput.files || []).filter(
@@ -102,20 +110,20 @@ function scheduleRender(): void {
 export default function FileUploadEnhancer() {
   useEffect(() => {
     const style = document.createElement('style');
-    style.dataset.smartUpload = 'stable';
+    style.dataset.smartUpload = 'release';
     style.textContent = `
       label.upload { position: relative; }
       .uploadFileCounter {
         position: absolute;
         top: 14px;
         right: 16px;
-        min-width: 48px;
-        padding: 6px 10px;
+        min-width: 58px;
+        padding: 7px 11px;
         border: 1px solid #d8e0e8;
         border-radius: 999px;
         background: #fff;
-        color: #3f4b5c;
-        font-size: 13px;
+        color: #26364b;
+        font-size: 12px;
         font-weight: 900;
         line-height: 1;
         text-align: center;
@@ -147,6 +155,7 @@ export default function FileUploadEnhancer() {
         font-size: 12px;
         font-weight: 800;
         cursor: pointer;
+        white-space: nowrap;
       }
       .fileActionButton:hover { background: #f7f9fb; border-color: #8798aa; }
       .fileActionDanger { color: #a32218; border-color: #efc4c0; background: #fff8f7; }
